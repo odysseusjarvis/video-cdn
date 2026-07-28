@@ -33,7 +33,7 @@ export default function Navbar() {
         transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
           scrolled
-            ? 'bg-dark/80 backdrop-blur-xl border-b border-glass-border shadow-lg shadow-black/20'
+            ? 'bg-white/80 backdrop-blur-xl border-b border-border'
             : 'bg-transparent'
         }`}
       >
@@ -53,8 +53,8 @@ export default function Navbar() {
                   to={item.path}
                   className={`relative px-4 py-2 text-sm font-medium rounded-lg transition-colors no-underline ${
                     location.pathname === item.path
-                      ? 'text-accent'
-                      : 'text-text-secondary hover:text-text-primary'
+                      ? 'text-text-primary font-semibold'
+                      : 'text-text-muted hover:text-text-primary'
                   }`}
                 >
                   {item.name}

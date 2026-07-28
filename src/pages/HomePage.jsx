@@ -1,6 +1,6 @@
 import PageTransition from '../components/layout/PageTransition'
-import Hero from '../components/home/Hero'
-import ServicesPreview from '../components/home/ServicesPreview'
+import HeroMinimal from '../components/home/HeroMinimal'
+import CarDisassembly from '../components/home/CarDisassembly'
 import WhyChooseUs from '../components/home/WhyChooseUs'
 import Stats from '../components/home/Stats'
 import CTABanner from '../components/home/CTABanner'
@@ -8,8 +8,8 @@ import CTABanner from '../components/home/CTABanner'
 export default function HomePage() {
   return (
     <PageTransition>
-      <Hero />
-      <ServicesPreview />
+      <HeroMinimal />
+      <CarDisassembly />
       <WhyChooseUs />
       <Stats />
       <CTABanner />
