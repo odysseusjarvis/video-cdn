@@ -21,7 +21,7 @@ export default function App() {
   const location = useLocation()
 
   return (
-    <div className="min-h-screen bg-dark">
+    <div className="min-h-screen bg-bg-primary">
       <ScrollToTop />
       <Navbar />
       <main>

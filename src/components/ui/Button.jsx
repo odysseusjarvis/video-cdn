@@ -2,9 +2,9 @@ import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 
 const variants = {
-  primary: 'bg-gradient-to-r from-accent to-accent-dark text-dark font-semibold shadow-lg shadow-accent-glow',
-  secondary: 'bg-glass border border-glass-border-accent text-accent backdrop-blur-xl',
-  outline: 'bg-transparent border border-glass-border text-text-primary',
+  primary: 'bg-accent text-white font-semibold shadow-sm hover:bg-dark-2',
+  secondary: 'bg-surface border border-border text-text-primary hover:bg-bg-secondary',
+  outline: 'bg-transparent border border-metal-light text-text-secondary hover:border-metal-dark hover:text-text-primary',
 }
 
 const sizes = {
@@ -16,7 +16,7 @@ const sizes = {
 export default function Button({ variant = 'primary', size = 'md', icon: Icon, href, to, children, className = '', ...props }) {
   const classes = `
     inline-flex items-center justify-center gap-2 rounded-xl font-medium
-    transition-colors cursor-pointer
+    transition-colors cursor-pointer no-underline
     ${variants[variant]} ${sizes[size]} ${className}
   `
 
@@ -36,7 +36,7 @@ export default function Button({ variant = 'primary', size = 'md', icon: Icon, h
   if (to) {
     return (
       <motion.div {...motionProps} className="inline-block">
-        <Link to={to} className={`${classes} no-underline`} {...props}>{content}</Link>
+        <Link to={to} className={classes} {...props}>{content}</Link>
       </motion.div>
     )
   }
