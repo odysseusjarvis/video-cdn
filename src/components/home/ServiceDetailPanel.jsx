@@ -1,5 +1,6 @@
+import { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { X, Check, ArrowRight } from 'lucide-react'
+import { X, Check, ArrowRight, Volume2, Pause } from 'lucide-react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
 
@@ -48,8 +49,27 @@ export default function ServiceDetailPanel({ service, onClose }) {
 }
 
 function PanelContent({ service, onClose }) {
+  const audioRef = useRef(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+
+  const toggleAudio = () => {
+    if (!audioRef.current) return
+    if (isPlaying) {
+      audioRef.current.pause()
+    } else {
+      audioRef.current.play()
+    }
+    setIsPlaying(!isPlaying)
+  }
+
   return (
     <div className="p-6 md:p-8">
+      <audio
+        ref={audioRef}
+        src={`/audio/${service.id}.mp3`}
+        onEnded={() => setIsPlaying(false)}
+      />
+
       {/* Close button */}
       <button
         onClick={onClose}
@@ -72,9 +92,18 @@ function PanelContent({ service, onClose }) {
       </h2>
 
       {/* Description */}
-      <p className="text-text-secondary leading-relaxed mb-8">
+      <p className="text-text-secondary leading-relaxed mb-4">
         {service.description}
       </p>
+
+      {/* Audio play button */}
+      <button
+        onClick={toggleAudio}
+        className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text-primary transition-colors mb-8 cursor-pointer bg-transparent border-none p-0"
+      >
+        {isPlaying ? <Pause size={16} /> : <Volume2 size={16} />}
+        {isPlaying ? 'Pauziraj' : 'Poslušaj opis'}
+      </button>
 
       {/* Features */}
       <Card hover={false} className="p-6 mb-8">

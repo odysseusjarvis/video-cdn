@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import SectionHeading from '../ui/SectionHeading'
-import GlassCard from '../ui/GlassCard'
+import Card from '../ui/Card'
 import ScrollReveal from '../ui/ScrollReveal'
 
 const highlights = [
@@ -42,13 +42,13 @@ export default function ServicesPreview() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {highlights.map((item, i) => (
             <ScrollReveal key={item.title} delay={i * 0.1}>
-              <GlassCard className="p-6 md:p-8 h-full">
-                <div className="w-12 h-12 rounded-xl bg-accent-subtle flex items-center justify-center mb-5">
-                  <item.icon className="text-accent" size={24} />
+              <Card className="p-6 md:p-8 h-full">
+                <div className="w-12 h-12 rounded-xl bg-bg-secondary flex items-center justify-center mb-5">
+                  <item.icon className="text-text-primary" size={24} />
                 </div>
                 <h3 className="text-text-primary font-semibold text-lg mb-3">{item.title}</h3>
                 <p className="text-text-secondary text-sm leading-relaxed">{item.description}</p>
-              </GlassCard>
+              </Card>
             </ScrollReveal>
           ))}
         </div>
@@ -56,7 +56,7 @@ export default function ServicesPreview() {
         <ScrollReveal delay={0.4} className="text-center mt-10">
           <Link
             to="/usluge"
-            className="inline-flex items-center gap-2 text-accent hover:text-accent-dark transition-colors no-underline text-sm font-medium"
+            className="inline-flex items-center gap-2 text-text-primary hover:text-text-secondary transition-colors no-underline text-sm font-medium"
           >
             Pogledajte sve usluge
             <ArrowRight size={16} />
