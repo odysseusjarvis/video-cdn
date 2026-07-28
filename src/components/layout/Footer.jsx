@@ -11,7 +11,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-12">
           <div>
             <Link to="/" className="flex items-center gap-2 no-underline mb-4">
-              <Zap className="text-accent" size={24} />
+              <Zap className="text-zinc-400" size={24} />
               <span className="text-xl font-bold text-white">
                 E-<span className="text-zinc-400">Drive</span>
               </span>
