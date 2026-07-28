@@ -42,7 +42,7 @@ export default function HeroMinimal() {
         {/* Main heading */}
         <motion.h1
           variants={fadeUp}
-          className="text-6xl md:text-7xl lg:text-8xl font-extrabold tracking-tight text-text-primary leading-[1.05] mb-6"
+          className="text-[2.75rem] sm:text-6xl md:text-7xl lg:text-8xl font-extrabold tracking-tight text-text-primary leading-[1.05] mb-6"
         >
           <span className="block">Autoelektrika</span>
           <span className="block">E-Drive</span>
