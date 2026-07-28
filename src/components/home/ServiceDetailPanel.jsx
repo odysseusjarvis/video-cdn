@@ -79,8 +79,17 @@ function PanelContent({ service, onClose }) {
         <X size={20} className="text-text-secondary" />
       </button>
 
+      {/* Part image */}
+      <div className="mb-6 mt-2 rounded-2xl overflow-hidden bg-bg-secondary">
+        <img
+          src={`/images/parts/${service.id}.jpg`}
+          alt={service.title}
+          className="w-full h-48 md:h-56 object-cover"
+        />
+      </div>
+
       {/* Category badge */}
-      <div className="mb-4 mt-2">
+      <div className="mb-4">
         <span className="inline-block text-xs font-medium tracking-wider uppercase text-text-muted bg-bg-secondary px-3 py-1 rounded-full">
           {service.category}
         </span>

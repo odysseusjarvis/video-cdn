@@ -16,14 +16,14 @@ const SERVICE_ICONS = {
 }
 
 const HOTSPOTS = [
-  { id: 'dijagnostika', x: 38, y: 32, label: 'Dijagnostika' },
-  { id: 'chip-tuning', x: 30, y: 22, label: 'Chip Tuning' },
-  { id: 'klima', x: 52, y: 48, label: 'Klima' },
-  { id: 'instalacije', x: 62, y: 70, label: 'Instalacije' },
-  { id: 'senzori', x: 22, y: 55, label: 'Senzori' },
-  { id: 'starteri', x: 72, y: 42, label: 'Starteri' },
-  { id: 'alarmi', x: 45, y: 18, label: 'Alarmi' },
-  { id: 'moduli', x: 55, y: 28, label: 'Moduli' },
+  { id: 'dijagnostika', x: 38, y: 50, label: 'Dijagnostika' },
+  { id: 'chip-tuning', x: 25, y: 48, label: 'Chip Tuning' },
+  { id: 'klima', x: 30, y: 63, label: 'Klima' },
+  { id: 'instalacije', x: 52, y: 65, label: 'Instalacije' },
+  { id: 'senzori', x: 70, y: 65, label: 'Senzori' },
+  { id: 'starteri', x: 22, y: 58, label: 'Starteri' },
+  { id: 'alarmi', x: 45, y: 42, label: 'Alarmi' },
+  { id: 'moduli', x: 62, y: 50, label: 'Moduli' },
 ]
 
 export default function CarDisassembly() {
@@ -69,7 +69,7 @@ export default function CarDisassembly() {
           >
             {/* Car image */}
             <img
-              src="/images/car/silver-sedan.jpg"
+              src="/images/car/car-hero.jpg"
               alt="Automobil - E-Drive servis"
               className="w-full h-auto block"
               loading="eager"
