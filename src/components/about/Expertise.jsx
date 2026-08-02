@@ -18,11 +18,11 @@ function SkillBar({ name, level, delay }) {
     <div ref={ref} className="mb-6">
       <div className="flex justify-between mb-2">
         <span className="text-text-primary text-sm font-medium">{name}</span>
-        <span className="text-accent text-sm font-semibold">{level}%</span>
+        <span className="text-text-primary text-sm font-semibold">{level}%</span>
       </div>
-      <div className="h-2 bg-dark-3 rounded-full overflow-hidden">
+      <div className="h-2 bg-bg-secondary rounded-full overflow-hidden">
         <motion.div
-          className="h-full bg-gradient-to-r from-accent to-accent-dark rounded-full"
+          className="h-full bg-accent rounded-full"
           initial={{ width: 0 }}
           animate={isInView ? { width: `${level}%` } : { width: 0 }}
           transition={{ duration: 1.2, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -37,7 +37,7 @@ export default function Expertise() {
     <section className="py-16">
       <ScrollReveal>
         <div className="max-w-2xl mx-auto">
-          <span className="text-accent text-sm font-semibold uppercase tracking-[0.2em] mb-3 block text-center">
+          <span className="text-text-primary text-sm font-semibold uppercase tracking-[0.2em] mb-3 block text-center">
             Ekspertiza
           </span>
           <h3 className="text-2xl md:text-3xl font-bold text-text-primary mb-10 text-center">

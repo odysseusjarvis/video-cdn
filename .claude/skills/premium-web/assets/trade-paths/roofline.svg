@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="tp-title tp-desc"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title id="tp-title">Roofline</title>
+  <desc id="tp-desc">A lodge roofline against a mountain ridge: pitched roof with overhanging eaves, chimney, door and two windows.</desc>
+  <g class="tp" style="--n:10">
+    <path class="tp-ln" pathLength="1" style="--i:0" d="M6 104 44 66l28 22 34-46 36 16 30-12 36 46 26-18"/>
+    <path class="tp-ln" pathLength="1" style="--i:1" d="M40 122 120 62l80 60"/>
+    <path class="tp-ln" pathLength="1" style="--i:2" d="M164 95V66h12v38"/>
+    <path class="tp-ln" pathLength="1" style="--i:3" d="M60 107v37M180 107v37"/>
+    <path class="tp-ln" pathLength="1" style="--i:4" d="M110 144v-32h20v32"/>
+    <path class="tp-ln" pathLength="1" style="--i:5" d="M74 116h24v20H74z"/>
+    <path class="tp-ln" pathLength="1" style="--i:6" d="M86 116v20M74 126h24"/>
+    <path class="tp-ln" pathLength="1" style="--i:7" d="M144 116h24v20h-24z"/>
+    <path class="tp-ln" pathLength="1" style="--i:8" d="M156 116v20M144 126h24"/>
+    <path class="tp-ln" pathLength="1" style="--i:9" d="M16 144h208"/>
+  </g>
+</svg>

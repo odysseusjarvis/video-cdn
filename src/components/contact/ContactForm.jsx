@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Send, CheckCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import GlassCard from '../ui/GlassCard'
+import Card from '../ui/Card'
 import ScrollReveal from '../ui/ScrollReveal'
 
 export default function ContactForm() {
@@ -14,15 +14,15 @@ export default function ContactForm() {
   }
 
   const inputClass = `
-    w-full bg-dark-3 border border-glass-border rounded-xl px-4 py-3
+    w-full bg-bg-primary border border-border rounded-xl px-4 py-3
     text-text-primary placeholder-text-muted text-sm
-    focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30
+    focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/20
     transition-colors
   `
 
   return (
     <ScrollReveal>
-      <GlassCard hover={false} className="p-6 md:p-8">
+      <Card hover={false} className="p-6 md:p-8">
         <h3 className="text-text-primary font-bold text-xl mb-6">Pošaljite Poruku</h3>
 
         <AnimatePresence mode="wait">
@@ -34,7 +34,7 @@ export default function ContactForm() {
               exit={{ opacity: 0, scale: 0.9 }}
               className="text-center py-12"
             >
-              <CheckCircle className="text-green-400 mx-auto mb-4" size={48} />
+              <CheckCircle className="text-green-500 mx-auto mb-4" size={48} />
               <p className="text-text-primary font-semibold text-lg">Poruka Poslana!</p>
               <p className="text-text-secondary text-sm mt-2">Javit ćemo vam se u najkraćem roku.</p>
             </motion.div>
@@ -63,7 +63,7 @@ export default function ContactForm() {
               />
               <button
                 type="submit"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-accent-dark text-dark font-semibold px-8 py-3 rounded-xl cursor-pointer border-none text-sm hover:shadow-lg hover:shadow-accent-glow transition-shadow"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-accent text-white font-semibold px-8 py-3 rounded-xl cursor-pointer border-none text-sm hover:bg-dark-2 transition-colors"
               >
                 <Send size={16} />
                 Pošaljite Poruku
@@ -71,7 +71,7 @@ export default function ContactForm() {
             </motion.form>
           )}
         </AnimatePresence>
-      </GlassCard>
+      </Card>
     </ScrollReveal>
   )
 }

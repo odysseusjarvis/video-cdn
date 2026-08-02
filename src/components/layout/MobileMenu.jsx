@@ -14,7 +14,7 @@ export default function MobileMenu({ isOpen, onClose }) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="fixed inset-0 z-40 bg-dark/95 backdrop-blur-xl md:hidden"
+          className="fixed inset-0 z-40 bg-white backdrop-blur-none md:hidden"
         >
           <div className="flex flex-col items-center justify-center h-full gap-6 pt-16">
             {siteConfig.nav.map((item, i) => (
@@ -30,8 +30,8 @@ export default function MobileMenu({ isOpen, onClose }) {
                   onClick={onClose}
                   className={`text-2xl font-semibold no-underline transition-colors ${
                     location.pathname === item.path
-                      ? 'text-accent'
-                      : 'text-text-secondary hover:text-text-primary'
+                      ? 'text-text-primary'
+                      : 'text-text-muted hover:text-text-primary'
                   }`}
                 >
                   {item.name}
@@ -49,7 +49,7 @@ export default function MobileMenu({ isOpen, onClose }) {
                 href={siteConfig.social.instagram}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-text-secondary hover:text-accent transition-colors no-underline"
+                className="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors no-underline"
               >
                 <InstagramIcon size={20} />
                 <span className="text-sm">@edrive.servis</span>

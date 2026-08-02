@@ -7,7 +7,7 @@ export default function Stats() {
     <section className="py-16 md:py-24">
       <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8">
         <ScrollReveal>
-          <div className="bg-glass border border-glass-border rounded-3xl p-8 md:p-12 backdrop-blur-xl">
+          <div className="bg-surface border border-border rounded-2xl p-8 md:p-12">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4">
               {siteConfig.stats.map((stat) => (
                 <AnimatedCounter

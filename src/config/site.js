@@ -39,6 +39,7 @@ export const siteConfig = {
       id: "dijagnostika",
       title: "Kompjuterska Dijagnostika",
       icon: "Monitor",
+      svgPartId: "part-ecu-display",
       category: "Dijagnostika",
       description: "Precizno očitavanje i analiza svih elektronskih sistema vašeg vozila pomoću najnovije dijagnostičke opreme.",
       features: [
@@ -52,6 +53,7 @@ export const siteConfig = {
       id: "chip-tuning",
       title: "Chip Tuning / ECU Remapping",
       icon: "Cpu",
+      svgPartId: "part-ecu-chip",
       category: "Chip Tuning",
       description: "Profesionalno remapiranje ECU jedinice za optimalne performanse i potrošnju goriva.",
       features: [
@@ -65,6 +67,7 @@ export const siteConfig = {
       id: "klima",
       title: "Auto Klima Servis",
       icon: "Snowflake",
+      svgPartId: "part-ac-compressor",
       category: "Klima Servis",
       description: "Kompletan servis auto klima sistema - od punjenja do popravke i zamjene komponenti.",
       features: [
@@ -78,6 +81,7 @@ export const siteConfig = {
       id: "instalacije",
       title: "Elektro Instalacije",
       icon: "Cable",
+      svgPartId: "part-wiring",
       category: "Elektro Radovi",
       description: "Popravka i ugradnja kompletnih elektro instalacija na svim tipovima vozila.",
       features: [
@@ -91,6 +95,7 @@ export const siteConfig = {
       id: "senzori",
       title: "Senzori i Aktuatori",
       icon: "Activity",
+      svgPartId: "part-sensors",
       category: "Dijagnostika",
       description: "Dijagnostika, kalibracija i zamjena svih vrsta senzora i aktuatora u vozilu.",
       features: [
@@ -104,6 +109,7 @@ export const siteConfig = {
       id: "starteri",
       title: "Starteri i Alternatori",
       icon: "BatteryCharging",
+      svgPartId: "part-starter-alternator",
       category: "Elektro Radovi",
       description: "Dijagnostika sistema punjenja, remont i zamjena startera, alternatora i regulatora.",
       features: [
@@ -117,6 +123,7 @@ export const siteConfig = {
       id: "alarmi",
       title: "Alarmi i Immobilizeri",
       icon: "ShieldCheck",
+      svgPartId: "part-alarm-module",
       category: "Elektro Radovi",
       description: "Ugradnja alarma, programiranje ključeva i rješavanje problema sa immobilizer sistemima.",
       features: [
@@ -130,6 +137,7 @@ export const siteConfig = {
       id: "moduli",
       title: "Moduli i Elektronika",
       icon: "CircuitBoard",
+      svgPartId: "part-electronic-module",
       category: "Dijagnostika",
       description: "Popravka i programiranje elektronskih modula - BSI, BCM, komfortna elektronika i više.",
       features: [

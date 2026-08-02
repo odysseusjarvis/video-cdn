@@ -31,7 +31,7 @@ export default function AnimatedCounter({ target, suffix = '', label }) {
 
   return (
     <div ref={ref} className="text-center">
-      <div className="text-4xl md:text-5xl font-extrabold text-accent mb-2">
+      <div className="text-4xl md:text-5xl font-extrabold text-text-primary mb-2">
         {count}{suffix}
       </div>
       <div className="text-text-secondary text-sm md:text-base">{label}</div>

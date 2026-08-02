@@ -1,5 +1,5 @@
 import { Gem, Heart, Lightbulb } from 'lucide-react'
-import GlassCard from '../ui/GlassCard'
+import Card from '../ui/Card'
 import ScrollReveal from '../ui/ScrollReveal'
 
 const values = [
@@ -26,13 +26,13 @@ export default function Values() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {values.map((value, i) => (
           <ScrollReveal key={value.title} delay={i * 0.15}>
-            <GlassCard className="p-8 text-center h-full">
-              <div className="w-16 h-16 rounded-2xl bg-accent-subtle flex items-center justify-center mx-auto mb-6">
-                <value.icon className="text-accent" size={32} />
+            <Card className="p-8 text-center h-full">
+              <div className="w-16 h-16 rounded-2xl bg-bg-secondary flex items-center justify-center mx-auto mb-6">
+                <value.icon className="text-text-primary" size={32} />
               </div>
               <h3 className="text-text-primary font-bold text-xl mb-3">{value.title}</h3>
               <p className="text-text-secondary leading-relaxed">{value.description}</p>
-            </GlassCard>
+            </Card>
           </ScrollReveal>
         ))}
       </div>
