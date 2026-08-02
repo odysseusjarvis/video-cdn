@@ -16,14 +16,14 @@ const SERVICE_ICONS = {
 }
 
 const HOTSPOTS = [
-  { id: 'dijagnostika', x: 38, y: 26, label: 'Dijagnostika' },
-  { id: 'chip-tuning', x: 32, y: 50, label: 'Chip Tuning' },
-  { id: 'klima', x: 50, y: 48, label: 'Klima' },
-  { id: 'instalacije', x: 50, y: 35, label: 'Instalacije' },
-  { id: 'senzori', x: 75, y: 72, label: 'Senzori' },
-  { id: 'starteri', x: 25, y: 55, label: 'Starteri' },
-  { id: 'alarmi', x: 45, y: 22, label: 'Alarmi' },
-  { id: 'moduli', x: 62, y: 28, label: 'Moduli' },
+  { id: 'dijagnostika', label: 'Dijagnostika', x: 38, y: 26, w: 14, h: 10, borderRadius: '40%', rotation: 0 },
+  { id: 'chip-tuning', label: 'Chip Tuning', x: 32, y: 50, w: 10, h: 8, borderRadius: '30%', rotation: -5 },
+  { id: 'klima', label: 'Klima', x: 18, y: 63, w: 12, h: 9, borderRadius: '35%', rotation: 0 },
+  { id: 'instalacije', label: 'Instalacije', x: 50, y: 35, w: 16, h: 7, borderRadius: '45%', rotation: 0 },
+  { id: 'senzori', label: 'Senzori', x: 75, y: 72, w: 10, h: 8, borderRadius: '50%', rotation: 0 },
+  { id: 'starteri', label: 'Starteri', x: 25, y: 55, w: 11, h: 9, borderRadius: '35%', rotation: 5 },
+  { id: 'alarmi', label: 'Alarmi', x: 45, y: 52, w: 12, h: 8, borderRadius: '40%', rotation: 0 },
+  { id: 'moduli', label: 'Moduli', x: 62, y: 28, w: 11, h: 9, borderRadius: '35%', rotation: 0 },
 ]
 
 export default function HeroCarVideo() {
@@ -121,76 +121,93 @@ export default function HeroCarVideo() {
 
         {/* Car area */}
         <div className="relative w-full max-w-[1000px] px-4 md:px-8 mt-auto mb-8 md:mb-16">
-          <div className="relative overflow-hidden rounded-2xl md:rounded-3xl shadow-2xl">
-            {/* Static car image (always visible as base/poster) */}
-            <img
-              src="/images/car/car-hero.jpg"
-              alt="Automobil - E-Drive servis"
-              className={`w-full h-auto block ${hasVideo ? 'invisible' : 'visible'}`}
-              loading="eager"
-            />
+          <div className="relative">
+            <div className="overflow-hidden rounded-2xl md:rounded-3xl shadow-2xl">
+              {/* Static car image (always visible as base/poster) */}
+              <img
+                src="/images/car/car-hero.jpg"
+                alt="Automobil - E-Drive servis"
+                className={`w-full h-auto block ${hasVideo ? 'invisible' : 'visible'}`}
+                loading="eager"
+              />
 
-            {/* Video overlay (scroll-driven) */}
-            <video
-              ref={videoRef}
-              className={`absolute inset-0 w-full h-full object-cover ${hasVideo ? 'visible' : 'invisible'}`}
-              muted
-              playsInline
-              preload="auto"
-              poster="/images/car/car-hero.jpg"
-            >
-              <source src="/videos/car-disassembly.mp4" type="video/mp4" />
-            </video>
+              {/* Video overlay (scroll-driven) */}
+              <video
+                ref={videoRef}
+                className={`absolute inset-0 w-full h-full object-cover ${hasVideo ? 'visible' : 'invisible'}`}
+                muted
+                playsInline
+                preload="auto"
+                poster="/images/car/car-hero.jpg"
+              >
+                <source src="/videos/car-disassembly.mp4" type="video/mp4" />
+              </video>
 
-            {/* Dark overlay for hotspot visibility */}
-            <motion.div
-              style={{ opacity: overlayOpacity }}
-              className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10"
-            />
+              {/* Dark overlay for hotspot visibility */}
+              <motion.div
+                style={{ opacity: overlayOpacity }}
+                className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10"
+              />
+            </div>
 
-            {/* Hotspot markers */}
+            {/* Glow hotspot layer — outside overflow-hidden so glow isn't clipped */}
             <motion.div
               style={{ opacity: hotspotsOpacity }}
-              className="absolute inset-0 hidden md:block"
+              className="absolute inset-0 hidden md:block pointer-events-none"
             >
               {HOTSPOTS.map((spot, index) => {
-                const Icon = SERVICE_ICONS[spot.id]
                 const isHovered = hoveredPart === spot.id
                 return (
-                  <div
+                  <motion.button
                     key={spot.id}
-                    className="absolute transform -translate-x-1/2 -translate-y-1/2"
-                    style={{ left: `${spot.x}%`, top: `${spot.y}%` }}
+                    initial={{ opacity: 0 }}
+                    animate={{
+                      opacity: 1,
+                      boxShadow: [
+                        '0 0 20px 8px rgba(59,130,246,0.10), inset 0 0 15px 5px rgba(59,130,246,0.06)',
+                        '0 0 30px 12px rgba(59,130,246,0.18), inset 0 0 20px 8px rgba(59,130,246,0.10)',
+                        '0 0 20px 8px rgba(59,130,246,0.10), inset 0 0 15px 5px rgba(59,130,246,0.06)',
+                      ],
+                    }}
+                    whileHover={{
+                      boxShadow: '0 0 40px 16px rgba(59,130,246,0.30), inset 0 0 25px 10px rgba(59,130,246,0.15)',
+                    }}
+                    transition={{
+                      opacity: { delay: 0.08 * index, duration: 0.4 },
+                      boxShadow: { duration: 2.5, repeat: Infinity, ease: 'easeInOut', delay: 0.15 * index },
+                    }}
+                    onClick={() => handlePartClick(spot.id)}
+                    onMouseEnter={() => setHoveredPart(spot.id)}
+                    onMouseLeave={() => setHoveredPart(null)}
+                    className="absolute cursor-pointer border-none p-0 pointer-events-auto"
+                    style={{
+                      left: `${spot.x - spot.w / 2}%`,
+                      top: `${spot.y - spot.h / 2}%`,
+                      width: `${spot.w}%`,
+                      height: `${spot.h}%`,
+                      borderRadius: spot.borderRadius || '40%',
+                      transform: `rotate(${spot.rotation || 0}deg)`,
+                      background: isHovered
+                        ? 'radial-gradient(ellipse at center, rgba(59,130,246,0.22) 0%, rgba(59,130,246,0.08) 60%, transparent 100%)'
+                        : 'radial-gradient(ellipse at center, rgba(59,130,246,0.12) 0%, rgba(59,130,246,0.04) 60%, transparent 100%)',
+                    }}
+                    aria-label={spot.label}
                   >
-                    <motion.button
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ delay: 0.1 * index, type: 'spring', stiffness: 300 }}
-                      onClick={() => handlePartClick(spot.id)}
-                      onMouseEnter={() => setHoveredPart(spot.id)}
-                      onMouseLeave={() => setHoveredPart(null)}
-                      className="group relative flex items-center justify-center cursor-pointer bg-transparent border-none p-0"
-                      aria-label={spot.label}
-                    >
-                      <span className="absolute w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/20 animate-ping" />
-                      <span className="relative w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-lg border border-white/50 transition-transform group-hover:scale-110">
-                        {Icon && <Icon size={18} className="text-zinc-800" />}
-                      </span>
-                      <AnimatePresence>
-                        {isHovered && (
-                          <motion.span
-                            initial={{ opacity: 0, y: 8, scale: 0.9 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 8, scale: 0.9 }}
-                            transition={{ duration: 0.15 }}
-                            className="absolute -bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap bg-white text-zinc-900 text-xs font-semibold px-3 py-1.5 rounded-lg shadow-lg"
-                          >
-                            {spot.label}
-                          </motion.span>
-                        )}
-                      </AnimatePresence>
-                    </motion.button>
-                  </div>
+                    <AnimatePresence>
+                      {isHovered && (
+                        <motion.span
+                          initial={{ opacity: 0, y: 6, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 6, scale: 0.95 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap bg-white/95 backdrop-blur-sm text-zinc-900 text-xs font-semibold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none z-10"
+                          style={{ top: '100%', marginTop: '8px' }}
+                        >
+                          {spot.label}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
                 )
               })}
             </motion.div>

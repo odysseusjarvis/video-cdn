@@ -16,14 +16,14 @@ const SERVICE_ICONS = {
 }
 
 const HOTSPOTS = [
-  { id: 'dijagnostika', x: 38, y: 26, label: 'Dijagnostika' },
-  { id: 'chip-tuning', x: 32, y: 50, label: 'Chip Tuning' },
-  { id: 'klima', x: 50, y: 48, label: 'Klima' },
-  { id: 'instalacije', x: 50, y: 35, label: 'Instalacije' },
-  { id: 'senzori', x: 75, y: 72, label: 'Senzori' },
-  { id: 'starteri', x: 25, y: 55, label: 'Starteri' },
-  { id: 'alarmi', x: 45, y: 22, label: 'Alarmi' },
-  { id: 'moduli', x: 62, y: 28, label: 'Moduli' },
+  { id: 'dijagnostika', label: 'Dijagnostika', x: 38, y: 26, w: 14, h: 10, borderRadius: '40%', rotation: 0 },
+  { id: 'chip-tuning', label: 'Chip Tuning', x: 32, y: 50, w: 10, h: 8, borderRadius: '30%', rotation: -5 },
+  { id: 'klima', label: 'Klima', x: 18, y: 63, w: 12, h: 9, borderRadius: '35%', rotation: 0 },
+  { id: 'instalacije', label: 'Instalacije', x: 50, y: 35, w: 16, h: 7, borderRadius: '45%', rotation: 0 },
+  { id: 'senzori', label: 'Senzori', x: 75, y: 72, w: 10, h: 8, borderRadius: '50%', rotation: 0 },
+  { id: 'starteri', label: 'Starteri', x: 25, y: 55, w: 11, h: 9, borderRadius: '35%', rotation: 5 },
+  { id: 'alarmi', label: 'Alarmi', x: 45, y: 52, w: 12, h: 8, borderRadius: '40%', rotation: 0 },
+  { id: 'moduli', label: 'Moduli', x: 62, y: 28, w: 11, h: 9, borderRadius: '35%', rotation: 0 },
 ]
 
 export default function CarDisassembly() {
