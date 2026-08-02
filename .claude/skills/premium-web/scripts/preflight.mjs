@@ -379,16 +379,41 @@ async function checkChromium(sharp, tmpDir) {
 }
 
 async function checkGitignore() {
+  /* ASK GIT, DO NOT GREP ONE FILE.
+   *
+   * The question is "will work/ be committed", and only git can answer it: the rule
+   * may live in the REPO ROOT's .gitignore, in a parent directory's, in
+   * .git/info/exclude, or in core.excludesFile — none of which is `<cwd>/.gitignore`.
+   * Reading that one path made this check report
+   *
+   *     WARN  work/ is gitignored   add "work/" to .gitignore ...
+   *
+   * for a tree where `git check-ignore -v .../work/preflight.json` answered
+   * `.gitignore:26:work/` — the rule existed, at the repo root, and the file was
+   * already ignored. Acting on that advice writes a SECOND .gitignore inside the
+   * skill directory, and --fix-gitignore would have done exactly that unprompted.
+   * A check that tells you to fix something already fixed teaches you to skip it. */
+  const workDir = path.join(CWD, 'work');
+  const probe = path.join(workDir, '.premium-web-ignore-probe');
+  const git = spawnSync('git', ['check-ignore', '-q', '--no-index', probe], {
+    cwd: CWD, encoding: 'utf8', timeout: 15000,
+  });
+  // exit 0 = ignored, 1 = not ignored, 128 = not a repo / git unavailable.
+  if (git.status === 0) {
+    return record('gitignore', 'work/ is gitignored', false, 'PASS', 'git confirms work/ is ignored — raw harvest + PNG intermediates stay out of git');
+  }
+  const inRepo = git.status === 1;
+  if (!inRepo) {
+    return record('gitignore', 'work/ is gitignored', false, 'NOTE', 'not a git repository (or git unavailable) — nothing to ignore yet');
+  }
   const gi = path.join(CWD, '.gitignore');
   let body = '';
   try { body = fs.readFileSync(gi, 'utf8'); } catch { /* no .gitignore yet */ }
-  const ignored = /^\/?work\/?\s*$/m.test(body);
-  if (ignored) return record('gitignore', 'work/ is gitignored', false, 'PASS', 'raw harvest + PNG intermediates stay out of git');
   if (args['fix-gitignore']) {
     fs.appendFileSync(gi, `${body && !body.endsWith('\n') ? '\n' : ''}# premium-web build scratch (raw harvest, PNG intermediates, tools)\nwork/\n`);
-    return record('gitignore', 'work/ is gitignored', false, 'PASS', 'appended "work/" to .gitignore');
+    return record('gitignore', 'work/ is gitignored', false, 'PASS', `appended "work/" to ${gi}`);
   }
-  return record('gitignore', 'work/ is gitignored', false, 'WARN', 'add "work/" to .gitignore (200MB+ of intermediates) or pass --fix-gitignore');
+  return record('gitignore', 'work/ is gitignored', false, 'WARN', 'git says work/ is NOT ignored — add "work/" to .gitignore (200MB+ of intermediates) or pass --fix-gitignore');
 }
 
 async function checkRembg() {

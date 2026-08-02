@@ -15,6 +15,13 @@
  *   D5  No decoded-memory ceiling, no mobile frame budget          -> sliding window + tiers
  *   D6  JPEG only, no WebP path                                    -> format negotiation
  *
+ * Two further defects were found by running scripts/verify.mjs against this
+ * component itself, and are fixed here:
+ *   D7  Poster cross-faded to opacity 0 once the canvas painted, which
+ *       disqualified it as an LCP candidate                        -> poster stays painted
+ *   D8  cover-fit showed 26% of a 16:9 frame in a 100svh pin on a
+ *       375x812 phone, passing every numeric gate                  -> mobileFit + a warning
+ *
  * Modes: 'scrub' (R2/R7) | 'crossfade' (R4) | 'wipe' (R3) | 'parallax' (R1).
  * R5 (hotspot reveal) composes on top of any mode via `children` + the --pw-progress var.
  *

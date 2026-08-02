@@ -524,6 +524,11 @@ smoothing/lerp between frames, use the canvas scrubber below.**
 
 The canvas scrubber (JS required):
 
+> **If React is already on the page, do not hand-roll this.** `assets/ScrollScrubber.jsx` is
+> the same pattern with the poster ladder, the sliding decoded-frame window, the device
+> tiers, the reduced-motion branch and the LCP-safe poster already solved — see
+> `references/scrubber-component.md`. The vanilla class below is for pages with no React.
+
 ```html
 <section class="stage seq" style="--stage-h: 400vh" aria-label="Product assembly sequence">
   <div class="stage__pin">

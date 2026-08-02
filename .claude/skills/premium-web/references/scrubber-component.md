@@ -57,10 +57,13 @@ should not be shipping 45 KB of animation library to draw one canvas.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
-| `poster` | `string` | **required** | The LCP element and the CLS guard. Rendered as a real `<img fetchpriority="high" loading="eager" decoding="async">` with explicit `width`/`height`, cross-fading out once the canvas has painted its first frame. |
+| `poster` | `string` | **required** | The LCP element and the CLS guard. Rendered as a real `<img fetchpriority="high" loading="eager" decoding="async">` with explicit `width`/`height`. It is **never faded out** — it stays painted underneath and the canvas fades in on top. See §3 D7 for why that is not cosmetic. |
 | `reducedMotionFrame` | `string` | `poster` | The still shown under `prefers-reduced-motion` / save-data. Usually the **last** frame — the most informative end state. |
-| `posterWidth` / `posterHeight` | `number` | `1280` / `720` | Intrinsic frame size. Used for the `<img>` attributes **and** for the decoded-memory arithmetic, so pass the real numbers. |
+| `posterWidth` / `posterHeight` | `number` | `1280` / `720` | Intrinsic frame size. Used for the `<img>` attributes, for the decoded-memory arithmetic **and** for the portrait-crop warning, so pass the real numbers. |
 | `fit` | `'cover' \| 'contain'` | `'cover'` | Canvas-side fit; no CSS `object-fit` is involved. |
+| `mobileFit` | `'cover' \| 'contain'` | `fit` | Fit on the `light` tier. **Read §8 "The portrait crop" before leaving this unset.** |
+| `pinHeight` / `mobilePinHeight` | `string` | `'100svh'` / `pinHeight` | Height of the sticky pin. Shortening it on phones is the other half of the portrait-crop fix. |
+| `cropWarnFraction` | `number` | `0.45` | Console-warn when cover-fit shows less than this fraction of the source frame's width. `0` silences it. |
 | `dprCap` | `number` | tier value (2 / 1.5) | Overrides the tier default. |
 | `keyframeEvery` | `number` | `4` | Every Nth frame is a pinned keyframe: loaded first, never evicted. |
 | `memoryBudgetMB` | `number` | `250` | Above this the sliding decoded-frame window turns on automatically. |
@@ -172,13 +175,15 @@ ship the same numbers to two clients:
 
 ---
 
-## 3. The six defects it fixes
+## 3. The defects it fixes
 
 The reference implementation is `src/components/home/HeroCarVideo.jsx`. It gets the hard parts
 right — sticky tall section, LERP at 0.08, redraw only when the integer frame index changes,
 DPR-aware `ResizeObserver`, cover-fit source-rect maths for `drawImage` — and all of that is
-kept. These six things it gets wrong, and every one of them is reproduced by anybody writing
-this pattern from memory.
+kept. **D1–D6** are what it gets wrong, and every one of them is reproduced by anybody writing
+this pattern from memory. **D7–D8** were found later, in this component, by running
+`scripts/verify.mjs` against it — which is the argument for running the gate on your own
+work rather than only on the client's.
 
 ### D1 — `ResizeObserver` resized the backing store but never redrew
 
@@ -207,8 +212,11 @@ though the frame index has not changed. A `matchMedia('(resolution: Xdppx)')` li
 DPR changes that arrive without a resize (dragging a window between a laptop and an external
 monitor).
 
-*Measured:* 1440×900 → 900×1200, no scroll, 120 ms wait — canvas repainted, cover-fit to the
-new aspect ratio, mean luminance 179 → 191. Before the fix this is a blank frame.
+*Measured* (Chromium 141, built probe page, parked at 28 % scroll): 1440×900 → 900×1200, **no
+scroll**, 120 ms wait — backing store 1440×900 → 900×1200, canvas repainted, 32×32 grid hash
+changed, mean luminance 199.0 → 208.1. Before the fix this is a blank frame. The luminance
+pair is whatever your frames happen to be; what is being asserted is *not blank* and *hash
+changed*, which is what a re-run should check.
 
 ### D2 — Preload was all-or-nothing: 60 images before anything rendered
 
@@ -316,7 +324,9 @@ store, ~46 MB**, and a brutal per-frame `drawImage` cost — for a screen that c
 **Fix — three interlocking limits.**
 
 1. **DPR clamp.** `Math.min(devicePixelRatio, dprCap)`; `dprCap` is 2 on desktop, 1.5 on the
-   light tier. *Measured on a 375 px viewport at DPR 3: backing store 563×1170, not 1125×2340.*
+   light tier. *Measured on a 375×812 viewport at `deviceScaleFactor: 3`: backing store
+   **563×1218**, not 1125×2436 — 375 × 1.5, not 375 × 3. The width is the number to check;
+   the height follows your viewport.*
 2. **Device tier** (`useDeviceTier`), re-evaluated on resize, orientation change and Network
    Information change, so it auto-reverts when a query stops matching:
 
@@ -367,8 +377,57 @@ Which format to actually ship is a real decision, not a default:
   is materially higher, and in a scrubber you pay it 60 times, not once.
 - **Never PNG for a sequence.** WebP/AVIF are mandatory only when you need alpha.
 
-Measured on this box by `scripts/frames.mjs`: 24 frames at 480 px went 5,232 KB PNG →
-314 KB WebP q72, about 13 KB/frame.
+Measured on this box by `scripts/frames.mjs`, reproducible verbatim:
+
+```
+node scripts/frames.mjs from-video public/videos/car-disassembly.mp4 \
+     --out /tmp/seq --fps 8 --max-frames 24 --widths 960,480
+  OK   desktop  24 frames    342 KB (14.3 KB/frame, 960x540)  decoded 50 MB
+  OK   mobile   24 frames    165 KB (6.9 KB/frame, 480x270)   decoded 12 MB
+  PNG intermediates 6,335,107 B -> emitted 577,148 B (9.1%)
+```
+
+So ~14 KB/frame at 960 px and ~7 KB/frame at 480 px, from lossless PNG at ~264 KB/frame.
+Per-frame cost scales with area, not with frame count — quote the width alongside the
+KB/frame or the number means nothing.
+
+### D7 — The poster cross-faded to `opacity: 0`, and lost LCP with it
+
+This one was not in the reference implementation. It was in **this component**, and
+`scripts/verify.mjs` found it when the component was run through its own gate:
+
+```
+FAIL  HERO-LCP-CANDIDATE     the hero <img> starts at opacity:0, so it is not an LCP candidate
+        poster.jpg — animation-name: none, computed opacity now: 0
+        LCP went to h1.hero-headline "Auto Servis Tuzla" instead.
+```
+
+The poster was styled `opacity: firstFrameReady ? 0 : 1` with a 320 ms transition, so the
+moment the canvas painted its first frame the poster faded away. It looks identical — the
+opaque canvas is covering it either way — and it costs you the measurement: **an element
+that reaches `opacity: 0` is not a largest-contentful-paint candidate.** On a fast
+connection the canvas wins that race, LCP silently hands off to whatever text is on screen,
+and the poster you spent the byte budget on is never the thing being timed. The failure is
+invisible in the design and visible only in the LCP element name.
+
+**Fix.** The poster is never faded. It stays at `opacity: 1` for the life of the page,
+underneath the canvas, and only the canvas fades in. Three things improve at once: the
+poster stays an LCP candidate, there is one fewer animated layer (and one fewer
+`will-change: opacity`), and `parallax` (alpha canvas) plus `fit="contain"` (letterbox
+bars) get a real backdrop instead of the page background showing through.
+
+*Measured, same build, before and after the change:*
+
+```
+before   FAIL  HERO-LCP-CANDIDATE   ... not an LCP candidate      HERO-PAYLOAD 364.9KB
+after    WARN  HERO-LCP-CANDIDATE   valid candidate, lost to text HERO-PAYLOAD 262.3KB
+```
+
+### D8 — cover-fit showed a quarter of the frame on a portrait phone
+
+See §8, "The portrait crop". It is a mobile-layout defect, not a loading one, and it is the
+only defect in this list that passes every numeric assertion in §7 while being obvious the
+instant you look at a screenshot.
 
 ---
 
@@ -457,6 +516,11 @@ not in payload. And note 147, not 148: `0148` returns 404.
 - [ ] Canvas is never an LCP candidate (the spec list is `<img>`, `<image>` in SVG, `<video>`,
       `url()` background-image, and block-level elements containing text). The poster is your
       LCP element — give it real `width`/`height` so it is also your CLS guard.
+- [ ] **Nothing fades the poster out.** Not this component (fixed, §3 D7) and not your own
+      CSS: an entrance animation on the hero `<img>` that passes through `opacity: 0`
+      disqualifies it from LCP. Animate a wrapper, or transform only.
+- [ ] **`mobileFit` / `mobilePinHeight` decided, not defaulted.** Check the console for the
+      portrait-crop warning at 375 px before you call the hero done (§8).
 - [ ] `posterWidth`/`posterHeight` are the **real** frame dimensions — the memory budget is
       computed from them.
 - [ ] `ariaLabel` describes what the animation *shows*, in the site's language. The canvas is
@@ -502,6 +566,48 @@ The assertions that actually catch the six defects — read the numbers, not the
 | D5 save-data | `addInitScript` overriding `navigator.connection.saveData` | 0 sequence frame requests |
 | Scroll CLS | `PerformanceObserver({type:'layout-shift'})` during a scripted scroll | 0 entries with `hadRecentInput === false` |
 | Mobile layout | 375 px viewport | `scrollWidth <= innerWidth` |
+| D7 poster LCP | `verify.mjs` HERO-LCP-CANDIDATE | not FAIL — the poster must never reach `opacity: 0` |
+| D8 portrait crop | `min(srcAspect,dstAspect)/max(...)` at 375 px | ≥ 0.45 of the frame visible, or a documented `mobileFit` / `mobilePinHeight` |
+
+Re-measured on this box, Chromium 141, against a built probe page. **Half of these numbers
+are a function of the props you pass**, so the configuration is stated with them — quoting a
+pin-height-dependent figure without the pin height is how a later re-run "disproves" a
+correct measurement.
+
+Measured with **1280×720 frames, `fit="cover"`, `pinHeight="100svh"`, `mobilePinHeight`
+UNSET** — i.e. the component's defaults, which is also the configuration that produces the
+D8 defect:
+
+```
+D1  resize 1440x900 -> 900x1200, no scroll   backing store 900x1200, hash changed, lum 199.0 -> 208.1
+D3  rAF calls in 1s, settled in view                                                              0
+D3  rAF calls in 1s, scrolled past                                                                0
+D4  reduce: data-pw-scrubber="static", reason="reduced-motion", canvases 0, rAF 0,
+    section height 812px == viewport 812px, still = reducedMotionFrame, --pw-progress: 1
+D5  375x812 @ deviceScaleFactor 3            backing store 563x1218   (375 x 1.5 wide;
+                                             the HEIGHT is 1.5 x the pin, so it moves
+                                             with mobilePinHeight — only 563 is the assertion)
+D5  saveData: true                           data-pw-scrubber="static", reason="save-data",
+                                             0 FrameStore requests
+D8  fraction of frame visible, cover          1440x900: 90%      375x812: 26%
+```
+
+Apply the §8 fix `mobilePinHeight="55svh"` to the same page and the phone column moves,
+exactly as the arithmetic in §8 says it must — this is the same component behaving correctly,
+not a contradiction:
+
+```
+D4  section height                            812 -> 447   (812 x 0.55)
+D5  backing store @ dSF 3                     563x1218 -> 563x671   (width unchanged)
+D8  fraction visible at 375x812               26% -> 47.2%          (clears the 0.45 gate)
+```
+
+**Frames really change** is a shape assertion, not a fixed count: sample the scrub at 7 evenly
+spaced positions and require the grid hash to take **at least 3 distinct values**, with repeats
+at the tail being normal — once the scrub reaches the last frame every later sample is
+identical by design. Measured 4 distinct / 7 at 1440 and 3 distinct / 7 at 375 on the 55svh
+build. A run that returns **1** distinct value is the real failure: the canvas is painting one
+frame forever.
 
 Then **look at the screenshots**. It is the only distinctiveness check that exists, and a
 scrubber can pass every numeric assertion while drawing a mis-cropped, upside-down or
@@ -510,6 +616,42 @@ duplicated sequence.
 ---
 
 ## 8. Known limits — say these out loud rather than discovering them
+
+### The portrait crop — the one defect every numeric gate misses
+
+`fit: 'cover'` crops the source to the destination aspect ratio. A landscape frame sequence
+in a full-height sticky pin on a portrait phone is the worst case in this component, and it
+is invisible to every check in §7: no horizontal overflow, no CLS, no budget breach, six
+distinct frame hashes, mean luminance healthy. The hero is simply unrecognisable.
+
+Measured on the built probe page, 1280×720 frames, `fit="cover"`, `pinHeight="100svh"`:
+
+| Viewport | Pin box aspect | Fraction of each frame visible |
+|---|---|---|
+| 1440 × 900 | 1.600 | **90 %** |
+| 375 × 812 | 0.462 | **26 %** |
+
+At 375 px you are showing roughly a quarter of the picture — for a car sequence, one door
+panel. The arithmetic is `min(srcAspect, dstAspect) / max(srcAspect, dstAspect)`.
+
+Three fixes, in order of how good they look:
+
+1. **Ship a portrait-cropped mobile ladder.** Re-run `scripts/frames.mjs` with a mobile
+   width and a portrait crop, point `mobileSrcPattern` at it. Best result, most work.
+2. **`mobilePinHeight`.** Measured at 375×812 with 1280×720 frames: `62svh` gives a
+   375×503 pin and **42 %** visible — better, and still under the default 0.45 threshold, so
+   the warning correctly keeps firing. `55svh` gives a 375×447 pin and **47 %**, which clears
+   it. The pin is shorter, so the overlay needs less room; budget for that.
+3. **`mobileFit="contain"`.** Nothing is cropped — the prop is applied to the canvas painter
+   *and* to the poster's `object-fit`, so the two never disagree. But a 16:9 frame in a
+   100svh portrait pin letterboxes to about a third of the height. Acceptable when the frame
+   is a diagram or a product on a plain ground; poor when it is an interior.
+
+The component warns once in the console when cover-fit drops below `cropWarnFraction`
+(default 0.45), naming the measured percentage and both pin dimensions. Do not silence it
+without doing one of the three.
+
+### Everything else
 
 - **Under ~12 real frames a `scrub` reads as steppy.** Use `crossfade` instead; the dissolve
   hides the gaps. Do not pad a thin sequence.

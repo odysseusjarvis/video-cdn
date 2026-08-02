@@ -499,8 +499,14 @@ function initScript({ killSmoothScroll }) {
    5. Scroll driving + settling  (see the smooth-scroll note at the top)
    ═══════════════════════════════════════════════════════════════════════════════ */
 
+/* Settling is an OPTIMISATION — it makes the next measurement stable. It is never a
+   gate, and nothing it does is worth the run. `page.evaluate()` has no implicit
+   timeout, so a single page-side promise that never settles wedges the harness
+   permanently (see the decode note below for the one that actually did). The Node-side
+   race is the structural guarantee that that can never cost more than a few seconds
+   again, whatever a future page throws at it. */
 async function settle(page, { quiet = 250, timeout = 5000 } = {}) {
-  await page.evaluate(
+  const evaluation = page.evaluate(
     async ({ quiet, timeout }) => {
       const frame = () =>
         new Promise((r) => {
@@ -520,13 +526,52 @@ async function settle(page, { quiet = 250, timeout = 5000 } = {}) {
       }
       try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (_) {}
       try {
-        const imgs = [...document.images].filter((i) => i.getBoundingClientRect().height > 0);
-        await Promise.allSettled(imgs.map((i) => (i.decode ? i.decode() : Promise.resolve())));
+        /* DECODE ONLY WHAT HAS ACTUALLY LOADED.
+         *
+         * `img.decode()` on an <img loading="lazy"> that is still below Chromium's
+         * lazy-load distance threshold returns a promise that NEVER SETTLES: the
+         * image has not begun fetching, and it will not begin while it stays
+         * off-screen — decode() has nothing to wait on and no reason to reject.
+         * `Promise.allSettled` over it therefore never resolves, and because
+         * page.evaluate() has no implicit timeout, THE WHOLE HARNESS HANGS. Not
+         * slowly — permanently. Reproduced in this container against a plain
+         * responsive gallery page (three `loading="lazy"` <img> in a grid):
+         *
+         *   viewport 375x812  lazy images at top≈1600 → complete:true  → decode resolved
+         *   viewport 768x1024 lazy images at top≈2000 → complete:true  → decode resolved
+         *   viewport 1440x900 lazy images at top=2572 → complete:FALSE,
+         *                                               naturalWidth:0 → NEVER SETTLED
+         *
+         * so the run screenshotted 375 and 768, then wedged forever entering the
+         * 1440 pass — the last viewport, after the useful-looking output had already
+         * been written, which is the worst possible shape for a bug. The old filter
+         * was `height > 0`, and a lazy image DOES have layout height (the width/height
+         * attributes reserve the box) long before it has bytes. Layout box is not
+         * evidence of a decodable image; `complete && naturalWidth > 0` is.
+         *
+         * The race is belt-and-braces: settling is an optimisation, never a gate, so
+         * a decode that misbehaves for some other reason must cost 2 s, not the run. */
+        const imgs = [...document.images].filter(
+          (i) => i.getBoundingClientRect().height > 0 && i.complete && i.naturalWidth > 0
+        );
+        await Promise.race([
+          Promise.allSettled(imgs.map((i) => (i.decode ? i.decode() : Promise.resolve()))),
+          new Promise((r) => setTimeout(r, 2000)),
+        ]);
       } catch (_) {}
       await frame();
     },
     { quiet, timeout }
   );
+  // A rejected evaluate (navigation mid-settle, context torn down) is also not worth
+  // the run — swallow it the same way, and never leave an unhandled rejection behind.
+  evaluation.catch(() => {});
+  let timer;
+  await Promise.race([
+    evaluation,
+    new Promise((r) => { timer = setTimeout(r, timeout + 8000); }),
+  ]);
+  clearTimeout(timer);
 }
 
 async function scrollToProgress(page, p) {
@@ -1803,9 +1848,46 @@ async function checkLanguages(browser, origin, dir) {
   const baseText = await page.evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').trim());
   const variants = [{ lang: decl.htmlLang.toLowerCase(), text: baseText, url: origin }];
 
-  for (const [lang, href] of declaredMap) {
-    if (!href) { failures.push(`${lang}: declared via og:locale:alternate but no URL is reachable from the page`); continue; }
+  /* RE-BASE ALTERNATES ONTO THE ORIGIN UNDER TEST.
+   *
+   * `<link rel="alternate" hreflang="en" href="https://klijent.ba/en/">` is CORRECT
+   * markup — hreflang must carry the production URL or the SEO signal is wrong, and
+   * i18n-seo.md rightly insists on absolute canonical + alternate URLs. But what this
+   * harness has under test is the BUILT BUNDLE, served from 127.0.0.1 by this script,
+   * before anything is deployed; this skill delivers a local bundle rather than
+   * pushing it, so verification ALWAYS runs pre-deploy. Following the literal href
+   * therefore leaves the build entirely and asks the public internet about a domain
+   * that does not resolve yet:
+   *
+   *   FAIL I18N-COMPLETE  en: https://stolarija-hodzic.ba/en/ unreachable
+   *                           (net::ERR_TUNNEL_CONNECTION_FAILED)
+   *
+   * — a NO-SHIP verdict on a build whose translations are perfect, for every properly
+   * marked-up multilingual site, which is this skill's core deliverable. Worse, it is
+   * unfixable from the site's side: making it pass would mean DOWNGRADING the hreflang
+   * markup to relative URLs. A gate that can only be cleared by breaking the thing it
+   * checks is worse than no gate.
+   *
+   * So: keep the declared URL for the report, but fetch the same PATH from the origin
+   * actually under test. Cross-origin alternates that genuinely live on another host
+   * (a real ccTLD split) are the one case this rewrites unhelpfully — they are named
+   * in the output so the rewrite is never silent. */
+  const ORIGIN_UNDER_TEST = new URL(origin).origin;
+  const localise = (href) => {
+    try {
+      const u = new URL(href, origin);
+      if (u.origin === ORIGIN_UNDER_TEST) return { url: u.href, declared: null };
+      return { url: new URL(u.pathname + u.search, origin).href, declared: u.href };
+    } catch (_) {
+      return { url: href, declared: null };
+    }
+  };
+
+  for (const [lang, declaredHref] of declaredMap) {
+    if (!declaredHref) { failures.push(`${lang}: declared via og:locale:alternate but no URL is reachable from the page`); continue; }
     if (lang === decl.htmlLang.toLowerCase()) continue;
+    const { url: href, declared } = localise(declaredHref);
+    if (declared) infos.push(`${lang}: declared as ${declared}, verified against the build at ${href}`);
     const p = await ctx.newPage();
     try {
       const resp = await p.goto(href, { waitUntil: 'domcontentloaded', timeout: 45000 });
