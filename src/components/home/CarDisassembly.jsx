@@ -16,14 +16,14 @@ const SERVICE_ICONS = {
 }
 
 const HOTSPOTS = [
-  { id: 'dijagnostika', x: 38, y: 50, label: 'Dijagnostika' },
-  { id: 'chip-tuning', x: 25, y: 48, label: 'Chip Tuning' },
-  { id: 'klima', x: 30, y: 63, label: 'Klima' },
-  { id: 'instalacije', x: 52, y: 65, label: 'Instalacije' },
-  { id: 'senzori', x: 70, y: 65, label: 'Senzori' },
-  { id: 'starteri', x: 22, y: 58, label: 'Starteri' },
-  { id: 'alarmi', x: 45, y: 42, label: 'Alarmi' },
-  { id: 'moduli', x: 62, y: 50, label: 'Moduli' },
+  { id: 'dijagnostika', x: 38, y: 26, label: 'Dijagnostika' },
+  { id: 'chip-tuning', x: 32, y: 50, label: 'Chip Tuning' },
+  { id: 'klima', x: 50, y: 48, label: 'Klima' },
+  { id: 'instalacije', x: 50, y: 35, label: 'Instalacije' },
+  { id: 'senzori', x: 75, y: 72, label: 'Senzori' },
+  { id: 'starteri', x: 25, y: 55, label: 'Starteri' },
+  { id: 'alarmi', x: 45, y: 22, label: 'Alarmi' },
+  { id: 'moduli', x: 62, y: 28, label: 'Moduli' },
 ]
 
 export default function CarDisassembly() {
