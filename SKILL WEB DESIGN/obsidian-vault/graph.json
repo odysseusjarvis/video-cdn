@@ -1,15 +1,15 @@
 {
  "naslov": "SKILL WEB DESIGN",
- "cvorova": 51,
- "veza": 110,
- "dokumenata": 3,
+ "cvorova": 52,
+ "veza": 120,
+ "dokumenata": 4,
  "cvorovi": [
   {
    "id": "GRESKA-01",
    "naslov": "Lažan kontakt kao činjenica",
    "vrsta": "greska",
    "izvor": "GRESKE.md",
-   "ulaznih": 1,
+   "ulaznih": 2,
    "izlaznih": 4
   },
   {
@@ -137,7 +137,7 @@
    "naslov": "Instagram iz kontejnera: nedostupan, pet ruta",
    "vrsta": "mjera",
    "izvor": "MJERENJA.md",
-   "ulaznih": 2,
+   "ulaznih": 3,
    "izlaznih": 4
   },
   {
@@ -166,11 +166,11 @@
   },
   {
    "id": "MJERA-05",
-   "naslov": "Javnih izvora o E-Drive Gradačac: nula",
+   "naslov": "Pretraga iz kontejnera: nula pogodaka *(izvori ipak postoje)*",
    "vrsta": "mjera",
    "izvor": "MJERENJA.md",
-   "ulaznih": 1,
-   "izlaznih": 2
+   "ulaznih": 0,
+   "izlaznih": 6
   },
   {
    "id": "MJERA-06",
@@ -245,20 +245,28 @@
    "izlaznih": 2
   },
   {
-   "id": "OTV-01",
-   "naslov": "E-Drive nema nijedan podatak osim imena",
-   "vrsta": "otvoreno",
-   "izvor": "OTVORENO.md",
-   "ulaznih": 2,
+   "id": "MJERA-15",
+   "naslov": "Prečka 5 je jedina koja je isporučila podatke",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 1,
    "izlaznih": 6
   },
   {
+   "id": "OTV-01",
+   "naslov": "~~E-Drive nema nijedan podatak~~ · RIJEŠENO 02.08.2026.",
+   "vrsta": "otvoreno",
+   "izvor": "OTVORENO.md",
+   "ulaznih": 3,
+   "izlaznih": 4
+  },
+  {
    "id": "OTV-02",
-   "naslov": "Neprovjereni podaci koji trenutno stoje na stranici",
+   "naslov": "~~Neprovjereni podaci na stranici~~ · RIJEŠENO 02.08.2026.",
    "vrsta": "otvoreno",
    "izvor": "OTVORENO.md",
    "ulaznih": 0,
-   "izlaznih": 2
+   "izlaznih": 4
   },
   {
    "id": "OTV-03",
@@ -313,7 +321,7 @@
    "naslov": "Ruta se mjeri prije nego uđe u plan",
    "vrsta": "pravilo",
    "izvor": "PRAVILA.md",
-   "ulaznih": 3,
+   "ulaznih": 5,
    "izlaznih": 6
   },
   {
@@ -628,9 +636,25 @@
   },
   {
    "from": "MJERA-05",
+   "to": "MJERA-15"
+  },
+  {
+   "from": "MJERA-05",
+   "to": "PRAVILO-03"
+  },
+  {
+   "from": "MJERA-05",
    "to": "OTV-01"
   },
   {
+   "from": "MJERA-05",
+   "to": "MJERA-15"
+  },
+  {
+   "from": "MJERA-05",
+   "to": "PRAVILO-03"
+  },
+  {
    "from": "MJERA-07",
    "to": "MJERA-06"
   },
@@ -743,8 +767,28 @@
    "to": "OTV-04"
   },
   {
-   "from": "OTV-01",
-   "to": "MJERA-05"
+   "from": "MJERA-15",
+   "to": "MJERA-01"
+  },
+  {
+   "from": "MJERA-15",
+   "to": "OTV-01"
+  },
+  {
+   "from": "MJERA-15",
+   "to": "PRAVILO-03"
+  },
+  {
+   "from": "MJERA-15",
+   "to": "MJERA-01"
+  },
+  {
+   "from": "MJERA-15",
+   "to": "OTV-01"
+  },
+  {
+   "from": "MJERA-15",
+   "to": "PRAVILO-03"
   },
   {
    "from": "OTV-01",
@@ -753,10 +797,6 @@
   {
    "from": "OTV-01",
    "to": "PRAVILO-02"
-  },
-  {
-   "from": "OTV-01",
-   "to": "MJERA-05"
   },
   {
    "from": "OTV-01",
@@ -772,7 +812,15 @@
   },
   {
    "from": "OTV-02",
+   "to": "GRESKA-01"
+  },
+  {
+   "from": "OTV-02",
    "to": "PRAVILO-02"
+  },
+  {
+   "from": "OTV-02",
+   "to": "GRESKA-01"
   },
   {
    "from": "OTV-03",

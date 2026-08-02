@@ -13,11 +13,12 @@ izvor: "MJERENJA.md"
 | headless Chromium (Playwright) | **`ERR_CONNECTION_RESET`** |
 | `r.jina.ai`, `imginn.com`, `picuki.com` | **HTTP 403** |
 | `web.archive.org` | blokiran za WebFetch |
-→ [[PRAVILO-03 Ruta se mjeri prije nego uđe u plan|📐 [[PRAVILO-03 Ruta se mjeri prije nego uđe u plan|📐 PRAVILO-03]]]], [[OTV-01 E-Drive nema nijedan podatak osim imena|🚧 [[OTV-01 E-Drive nema nijedan podatak osim imena|🚧 OTV-01]]]]
+→ [[PRAVILO-03 Ruta se mjeri prije nego uđe u plan|📐 [[PRAVILO-03 Ruta se mjeri prije nego uđe u plan|📐 PRAVILO-03]]]], [[OTV-01 ~~E-Drive nema nijedan podatak~~ · RIJEŠENO 02.08.2026.|🚧 [[OTV-01 ~~E-Drive nema nijedan podatak~~ · RIJEŠENO 02.08.2026.|🚧 OTV-01]]]]
 
 ---
 
 ## Vezano
 
-- [[OTV-01 E-Drive nema nijedan podatak osim imena|🚧 OTV-01 — E-Drive nema nijedan podatak osim imena]]
+- [[MJERA-15 Prečka 5 je jedina koja je isporučila podatke|📊 MJERA-15 — Prečka 5 je jedina koja je isporučila podatke]]
+- [[OTV-01 ~~E-Drive nema nijedan podatak~~ · RIJEŠENO 02.08.2026.|🚧 OTV-01 — ~~E-Drive nema nijedan podatak~~ · RIJEŠENO 02.08.2026.]]
 - [[PRAVILO-03 Ruta se mjeri prije nego uđe u plan|📐 PRAVILO-03 — Ruta se mjeri prije nego uđe u plan]]

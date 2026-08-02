@@ -37,10 +37,17 @@ Lokalni Playwright 1.56.1 traži `chromium_headless_shell-1234`; u slici postoji
 Posljedica: Gemini kao „veliki kontekst" nije bio na raspolaganju; posao je odrađen
 destilacijom umjesto većim prozorom. → [[MJERA-06]]
 
-## MJERA-05 — Javnih izvora o E-Drive Gradačac: nula
-Tri pretrage, uključujući `akta.ba` registar. Jedini pogodak je sam Instagram profil.
-Nema Google Business profila, nema recenzija, nema unosa u registru.
-→ [[OTVORENO#OTV-01]]
+## MJERA-05 — Pretraga iz kontejnera: nula pogodaka *(izvori ipak postoje)*
+Tri pretrage, uključujući `akta.ba`. Jedini pogodak bio je sam Instagram profil.
+
+**Ispravka, 02.08.2026.:** izvori **postoje** — vlasnikov dosje ih navodi i citira:
+unos u registru na `akta.ba` (Obrtnička radnja „E-Drive", ID 4312031980000),
+profil na `Kupci.com`, i Facebook stranica. Nije ih bilo jer ih **ova pretraga nije
+našla**, ne zato što ih nema.
+
+Zato je formulacija bitna: mjeri se *šta je ruta vratila*, nikad *šta postoji na svijetu*.
+„Nema ga online" i „nisam ga našao" nisu isti nalaz.
+→ [[OTVORENO#OTV-01]], [[MJERENJA#MJERA-15]], [[PRAVILA#PRAVILO-03]]
 
 ---
 
@@ -122,3 +129,13 @@ razlog zašto se procjena ne upisuje kao mjerenje.
 dostići; provjere mogu hvatati samo komentare i konflikte.
 → [[OTVORENO#OTV-04]]
 
+
+## MJERA-15 — Prečka 5 je jedina koja je isporučila podatke
+Četiri mrežne rute (WebSearch, WebFetch, curl, headless browser) dale su **nula**
+upotrebljivih podataka o E-Drive. Peta prečka — čovjek pošalje dosje i screenshotove —
+dala je **sve**: telefon, adresu, radno vrijeme, vlasnika, ID broj, 8 usluga,
+2 portfolio primjera sa brojkama, paletu i slogane.
+
+Odnos uloženo/dobiveno: ~40 minuta mrežnog istraživanja = 0 polja;
+jedan upload = 21 popunjeno polje.
+→ [[MJERENJA#MJERA-01]], [[OTVORENO#OTV-01]], [[PRAVILA#PRAVILO-03]]

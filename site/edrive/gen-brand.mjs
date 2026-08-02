@@ -17,7 +17,7 @@ const poster = 'data:image/webp;base64,' +
    Dok je PHONE null, svako dugme vodi na Instagram: to je jedini kanal za koji je
    provjereno da postoji. Kad pravi broj stigne iz istrazivackog dokumenta, upisi ga
    ovdje i cijela stranica se povuce sama — nigdje nema rucno upisanog broja. */
-const PHONE = null;                                  // npr. '+38761123456'
+const PHONE = '+38762844979';                        // 062/844-979 — potvrđeno: IG, FB, Kupci.com, Akta.ba
 const IG    = 'https://www.instagram.com/edrive.servis/';
 const CONTACT           = PHONE ? 'tel:' + PHONE : IG;
 const CONTACT_ALT       = PHONE ? 'https://wa.me/' + PHONE.replace(/\D/g, '') : IG;
@@ -28,39 +28,39 @@ const CONTACT_ROW_LABEL = PHONE ? 'Telefon' : 'Instagram';
 const CONTACT_DISPLAY   = PHONE || '@edrive.servis';
 
 const SERVICES = [
-  { id: 'dijagnostika', ico: '🖥️', t: 'Dijagnostika', d: 'Svaki modul se čita posebno. Nalaz prije popravke.',
-    long: 'Priključimo se na vozilo i pročitamo svaki upravljački modul zasebno — motor, ABS, airbag, komfort. Live data pokazuje šta senzor stvarno šalje, ne šta bi trebao. Dobiješ nalaz prije nego išta dodirnemo.' },
-  { id: 'chip', ico: '⚙️', t: 'Chip tuning', d: 'Remap ECU jedinice. Snaga i potrošnja.',
-    long: 'Originalna mapa se skine, izmijeni i vrati. Stage 1 radi na serijskom motoru, Stage 2 traži hardverske izmjene. DPF, EGR i AdBlue se rješavaju zasebno, po dogovoru.' },
-  { id: 'klima', ico: '❄️', t: 'Klima', d: 'Detekcija curenja, punjenje, dezinfekcija.',
-    long: 'Prvo se traži curenje pod pritiskom — punjenje bez toga je bacanje novca. Sistem se vakuumira, napuni i provjeri. Isparivač se dezinficira jer je izvor mirisa.' },
-  { id: 'instalacije', ico: '🔌', t: 'Instalacije', d: 'Kratki spojevi, rekabliranje, dodatna oprema.',
-    long: 'Kvar na instalaciji rijetko je tamo gdje se simptom vidi. Traži se od izvora struje do potrošača. Rekabliranje se radi po originalnoj shemi, ne improvizacijom.' },
-  { id: 'senzori', ico: '📡', t: 'Senzori', d: 'Lambda, MAF, MAP, ABS. Kalibracija i zamjena.',
-    long: 'Senzor koji laže troši gorivo mjesecima prije nego upali lampicu. Live data uporedi vrijednost sa očekivanom pod opterećenjem — tako se nađe onaj koji je „ispravan" po grešci a nije.' },
-  { id: 'starteri', ico: '🔋', t: 'Starteri', d: 'Sistem punjenja, remont, alternatori.',
-    long: 'Prvo se mjeri sistem punjenja, pa tek onda mijenja dio. Alternator koji ne puni često je regulator, ne cijeli sklop. Provjera akumulatora pod opterećenjem, ne samo napon.' },
-  { id: 'alarmi', ico: '🛡️', t: 'Alarmi i ključevi', d: 'Programiranje ključeva, immobilizer.',
-    long: 'Programiramo ključeve i daljinske za većinu marki. Immobilizer koji ne prepoznaje ključ obično je antena oko brave ili modul, a ne ključ. Centralna brava i podizači se rješavaju uz to.' },
-  { id: 'moduli', ico: '🧩', t: 'Moduli', d: 'BSI, BCM, komfortna elektronika.',
-    long: 'Elektronski moduli se popravljaju, ne samo mijenjaju. BSI i BCM su najčešći kod francuskih i njemačkih vozila. Kodiranje nakon zamjene je obavezno — dio bez kodiranja je mrtav dio.' },
+  { id: 'autoelektrika', ico: '⚡', t: 'Autoelektrika', d: 'Popravke električnih kvarova na svim vozilima.',
+    long: 'Kvar na instalaciji rijetko je tamo gdje se simptom vidi. Traži se od izvora struje do potrošača, pa se popravlja ono što je stvarno u kvaru.' },
+  { id: 'dijagnostika', ico: '🖥️', t: 'Dijagnostika za sva vozila', d: 'Svaki modul se čita posebno.',
+    long: 'Priključimo se na vozilo i pročitamo svaki upravljački modul zasebno. Live data pokazuje šta senzor stvarno šalje, ne šta bi trebao.' },
+  { id: 'kljucevi', ico: '🔑', t: 'Izrada ključeva', d: 'Ključevi i daljinski za većinu marki.',
+    long: 'Izrada i programiranje ključeva. Immobilizer koji ne prepoznaje ključ obično je antena oko brave ili modul, a ne sam ključ.' },
+  { id: 'kodiranje', ico: '🧩', t: 'Kodiranje', d: 'Kodiranje i aktivacije skrivenih funkcija.',
+    long: 'Kodiranje nakon zamjene dijela je obavezno — dio bez kodiranja je mrtav dio. Radimo i aktivacije tvorničkih funkcija koje nisu uključene.' },
+  { id: 'elektronika', ico: '🔌', t: 'Programiranje i zamjena elektronike', d: 'Moduli se popravljaju, ne samo mijenjaju.',
+    long: 'Programiranje i zamjena upravljačkih jedinica. Gdje se modul može popraviti, popravlja se — zamjena je zadnja opcija, ne prva.' },
+  { id: 'igla', ico: '🛡️', t: 'IGLA zaštita', d: 'Elektronska zaštita vozila od krađe.',
+    long: 'Ugradnja IGLA elektronske zaštite. Sistem radi kroz originalnu elektroniku vozila, bez dodatnih tastera i bez rezanja instalacije. Ugrađeno na BMW X2 U10 i BMW X5.' },
+  { id: 'stage', ico: '🏁', t: 'Pojačavanje snage (Stage 1)', d: 'Remap, Hot Start Fix, Vmax OFF.',
+    long: 'Stage 1 na serijskom motoru. Primjer: Audi SQ5 3.0 V6 TFSI — 345 na 402 KS, 440 na 520 Nm, uz Pop & Bang i Rev limiter OFF. Radimo i Hot Start Fix i Vmax OFF.' },
+  { id: 'softver', ico: '⚙️', t: 'AdBlue · DPF · EGR', d: 'SCR, TVA, SWIRL, FLAPS — softverski.',
+    long: 'Softverska rješenja za AdBlue, SCR, DPF, EGR, TVA, SWIRL i FLAPS. Primjer: BMW M3 Competition — OPF delete softverski, bez diranja ECU zaštite i bez check engine lampica.' },
 ];
 
 const html = `<title>Autoelektrika E-Drive — Gradačac</title>
 <style>
 :root{
   --ink:#07090B; --paper:#fff; --sunk:#F5F7F8; --rule:#E4E8EB; --dim:#4E575F; --faint:#8A939B;
-  --brand:#0D5A6E; --deep:#04222C; --gold:#C79A46;
+  --brand:#F5A623; --deep:#0A0A0A; --gold:#F5A623;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   --serif:Charter,"Iowan Old Style",Georgia,serif;
 }
 @media (prefers-color-scheme:dark){:root{--ink:#EEF1F3;--paper:#080B0D;--sunk:#11161A;--rule:#212A30;
-  --dim:#9AA4AC;--faint:#6A737B;--brand:#4FB8CE;--deep:#02161D;--gold:#DDB265;}}
+  --dim:#9AA4AC;--faint:#6A737B;--brand:#F5A623;--deep:#0A0A0A;--gold:#F5A623;}}
 :root[data-theme="dark"]{--ink:#EEF1F3;--paper:#080B0D;--sunk:#11161A;--rule:#212A30;--dim:#9AA4AC;
-  --faint:#6A737B;--brand:#4FB8CE;--deep:#02161D;--gold:#DDB265;}
+  --faint:#6A737B;--brand:#F5A623;--deep:#0A0A0A;--gold:#F5A623;}
 :root[data-theme="light"]{--ink:#07090B;--paper:#fff;--sunk:#F5F7F8;--rule:#E4E8EB;--dim:#4E575F;
-  --faint:#8A939B;--brand:#0D5A6E;--deep:#04222C;--gold:#C79A46;}
+  --faint:#8A939B;--brand:#F5A623;--deep:#0A0A0A;--gold:#F5A623;}
 
 *{box-sizing:border-box}
 html{overflow-x:clip}
@@ -94,15 +94,15 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);l
 /* Auto je svijetao, tekst je bijel — veo mora imati pod i na vrhu i pri dnu,
    a sredina ostaje bistra da se rasklapanje vidi. */
 .heroVeil{position:absolute;inset:0;background:
-  linear-gradient(180deg,#04222Cf2 0%,#04222C94 26%,#04222C3d 50%,#04222Ca8 78%,#04222Cfa 100%)}
+  linear-gradient(180deg,#0A0A0Af2 0%,#0A0A0A94 26%,#0A0A0A3d 50%,#0A0A0Aa8 78%,#0A0A0Afa 100%)}
 .heroIn{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
   color:#fff;z-index:3;opacity:var(--ho,1);pointer-events:none}
 .heroIn a{pointer-events:auto}
 /* uspravno: kadar 16:9 sjedi u sredini prozora — tekst se dize iznad njega */
 @media (max-aspect-ratio:1/1){.heroIn{justify-content:flex-start;padding-top:13vh}}
 .eyebrow{font:700 10.5px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--gold);
-  margin:0 0 18px;text-shadow:0 1px 12px #04222C}
-.hero h1,.hero .sub{text-shadow:0 2px 20px #04222Cd9}
+  margin:0 0 18px;text-shadow:0 1px 12px #0A0A0A}
+.hero h1,.hero .sub{text-shadow:0 2px 20px #0A0A0Ad9}
 .hero h1{font-size:clamp(38px,9vw,86px);font-weight:800;letter-spacing:-.045em;line-height:.98;
   margin:0 0 18px;text-wrap:balance;max-width:15ch}
 .hero h1 b{display:block;color:var(--brand);font-weight:800}
@@ -125,9 +125,9 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);l
 .seqTxt{position:absolute;left:0;right:0;bottom:9vh;z-index:3;text-align:center;padding:0 22px;
   color:#fff;opacity:var(--so,0)}
 .seqTxt b{display:block;font-size:clamp(23px,4.6vw,40px);font-weight:800;letter-spacing:-.035em;
-  line-height:1.06;margin:0 auto 10px;max-width:20ch;text-wrap:balance;text-shadow:0 2px 18px #04222C}
+  line-height:1.06;margin:0 auto 10px;max-width:20ch;text-wrap:balance;text-shadow:0 2px 18px #0A0A0A}
 .seqTxt span{font-family:var(--serif);font-size:15.5px;color:#ffffffe0;line-height:1.55;
-  display:block;max-width:44ch;margin:0 auto;text-shadow:0 1px 14px #04222C}
+  display:block;max-width:44ch;margin:0 auto;text-shadow:0 1px 14px #0A0A0A}
 
 section{padding:76px 0}
 .lbl{font:800 10.5px var(--sans);letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin:0 0 10px}
@@ -154,7 +154,7 @@ h2{font-size:clamp(27px,4.6vw,42px);font-weight:800;letter-spacing:-.035em;margi
 
 /* iskocni prozor */
 .pop{position:fixed;inset:0;z-index:95;display:none;place-items:center;padding:20px;
-  background:#04222ccc;backdrop-filter:blur(6px)}
+  background:#0a0a0acc;backdrop-filter:blur(6px)}
 .pop.on{display:grid}
 .popIn{background:var(--paper);border-radius:20px;max-width:520px;width:100%;padding:30px 28px 26px;
   position:relative;box-shadow:0 30px 80px #0006;animation:popup .3s cubic-bezier(.2,.9,.3,1)}
@@ -170,19 +170,20 @@ h2{font-size:clamp(27px,4.6vw,42px);font-weight:800;letter-spacing:-.035em;margi
 .popCta .p{background:var(--brand);color:#fff}
 .popCta .s{background:var(--sunk);color:var(--ink)}
 
-/* prije/poslije preko cijelog prozora */
-.baWrap{position:relative;height:100svh;min-height:480px;background:var(--deep);overflow:hidden}
-.baL,.baR{position:absolute;inset:0;display:grid;place-items:center;color:#fff;text-align:center;
-  font-family:var(--mono);font-size:13px;line-height:1.6;padding:24px}
-.baL{background:linear-gradient(140deg,#5E4A3E,#2B211B)}
-.baR{background:linear-gradient(140deg,var(--brand),var(--deep));clip-path:inset(0 0 0 50%)}
-.baH{position:absolute;top:0;bottom:0;left:50%;width:2px;background:#fff;box-shadow:0 0 14px #0008;z-index:3}
-.baH::after{content:"⇤⇥";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  background:#fff;color:var(--ink);font-size:15px;width:52px;height:52px;border-radius:50%;
-  display:grid;place-items:center;box-shadow:0 4px 16px #0006;letter-spacing:-2px}
-.baCap{position:absolute;left:0;right:0;top:34px;z-index:4;text-align:center;color:#fff;pointer-events:none}
-.baCap b{display:block;font-size:clamp(22px,4vw,34px);font-weight:800;letter-spacing:-.03em}
-.baCap span{font:600 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;opacity:.7}
+/* rezultat sa brojkama — stvarno mjerenje, ne lažna fotografija */
+.baWrap{position:relative;min-height:100svh;background:var(--deep);overflow:hidden;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6vh;padding:80px 22px}
+.baCap{position:relative;z-index:4;text-align:center;color:#fff}
+.baCap b{display:block;font-size:clamp(22px,4vw,38px);font-weight:800;letter-spacing:-.03em;margin-top:8px}
+.baCap span{font:600 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+.baNums{display:flex;gap:clamp(28px,7vw,90px);flex-wrap:wrap;justify-content:center}
+.baNums div{text-align:center;color:#fff}
+.baNums i{font-style:normal;font-weight:800;font-size:clamp(34px,8vw,68px);letter-spacing:-.04em;
+  font-variant-numeric:tabular-nums;opacity:.45}
+.baNums i.up{opacity:1;color:var(--brand)}
+.baNums s{text-decoration:none;font-size:clamp(20px,4vw,34px);margin:0 .35em;opacity:.5}
+.baNums span{display:block;margin-top:6px;font:600 10.5px var(--mono);letter-spacing:.16em;color:#ffffff8c}
+.baFine{position:relative;z-index:4;font:600 12px var(--mono);color:#ffffff9e;text-align:center;margin:0}
 
 .quote{background:var(--sunk)}
 .quote blockquote{margin:0;font-family:var(--serif);font-size:clamp(19px,3.4vw,28px);line-height:1.42;
@@ -206,13 +207,12 @@ h2{font-size:clamp(27px,4.6vw,42px);font-weight:800;letter-spacing:-.035em;margi
   /* bez skrola koraci nemaju redoslijed — ostaje samo hero tekst, da se ne preklapaju */
   .seqTxt{display:none}
   /* jedan statican kadar ispod teksta — veo mora biti jaci nego kad se krece */
-  .heroVeil{background:linear-gradient(180deg,#04222Cf7 0%,#04222Cd9 50%,#04222Cfa 100%)}
+  .heroVeil{background:linear-gradient(180deg,#0A0A0Af7 0%,#0A0A0Ad9 50%,#0A0A0Afa 100%)}
   .navcall{transform:none;opacity:1}
   .box .go{transform:none;opacity:1}
 }
 </style>
 
-<div class="note">DEMO · animacija radi · slike radionice i pravi kontakt se ubacuju prije objave</div>
 
 <nav class="nav" id="nav"><div class="in">
   <span class="brandmark">E<s>—</s>DRIVE</span>
@@ -235,7 +235,7 @@ h2{font-size:clamp(27px,4.6vw,42px);font-weight:800;letter-spacing:-.035em;margi
       </div>
     </div></div>
     <div class="seqTxt"><b id="seqT">Auto je jedan sistem</b><span id="seqB">Struja, senzori, moduli i instalacija rade zajedno. Kad jedno otkaže, simptom se pojavi negdje sasvim drugdje.</span></div>
-    <div class="hMeta w"><span>OTVORENO DO 17:00</span><span>IZLAZAK NA TEREN</span><span>NALAZ ISTI DAN</span></div>
+    <div class="hMeta w"><span>PON–PET 08–16</span><span>SUB 08–15</span><span>SARAJEVSKA BB, GRADAČAC</span></div>
     <div class="progress" id="hprog"></div>
   </div>
 </header>
@@ -248,10 +248,12 @@ h2{font-size:clamp(27px,4.6vw,42px);font-weight:800;letter-spacing:-.035em;margi
 </div></section>
 
 <section class="baWrap" id="ba">
-  <div class="baL">PRIJE<br><small style="opacity:.75">ovdje ide njegova stvarna fotografija</small></div>
-  <div class="baR" id="baR">POSLIJE<br><small style="opacity:.75">ista tačka, isti kadar</small></div>
-  <div class="baH" id="baH"></div>
-  <div class="baCap"><span>Prevuci</span><b>Isti auto, dva sata kasnije</b></div>
+  <div class="baCap"><span>Mjerljivo</span><b>Audi SQ5 3.0 V6 TFSI — Stage 1</b></div>
+  <div class="baNums">
+    <div><i>345</i><s>→</s><i class="up">402</i><span>KONJSKIH SNAGA</span></div>
+    <div><i>440</i><s>→</s><i class="up">520</i><span>Nm MOMENTA</span></div>
+  </div>
+  <p class="baFine">Pop &amp; Bang · Rev limiter OFF · bez check engine lampica</p>
 </section>
 
 <section class="quote"><div class="w">
@@ -264,9 +266,9 @@ h2{font-size:clamp(27px,4.6vw,42px);font-weight:800;letter-spacing:-.035em;margi
   <h2>Javi se, kažemo odmah da li možemo</h2>
   <div class="row">
     <div><b>${CONTACT_ROW_LABEL}</b><a href="${CONTACT}">${CONTACT_DISPLAY}</a></div>
-    <div><b>Gdje</b>Gradačac 76250, BiH</div>
-    <div><b>Radno vrijeme</b>Pon–Pet 08–17 · Sub 08–13</div>
-    <div><b>Teren</b>Gradačac i okolina</div>
+    <div><b>Gdje</b>Sarajevska bb, 75320 Gradačac</div>
+    <div><b>Radno vrijeme</b>Pon–Pet 08–16 · Sub 08–15 · Ned neradna</div>
+    <div><b>Vlasnik</b>Amar Hadžiahmetović</div>
   </div>
   <a class="bCall" href="${CONTACT}" style="display:inline-block">${CONTACT_LABEL}</a>
   <p class="fine" style="margin-top:34px">Autoelektrika E-Drive · Gradačac</p>
@@ -394,7 +396,7 @@ scrubber(document.getElementById('heroCanvas'), ()=>{
   if(p>0.01&&heroImg.style.opacity!=='0')heroImg.style.opacity='0';
   const i=p<.40?0:p<.72?1:2;
   if(i!==lastStep){lastStep=i;ST.textContent=STEPS[i][0];SB.textContent=STEPS[i][1];}
-  return p; }, 'auto', '#04222C');
+  return p; }, 'auto', '#0A0A0A');
 
 /* nav */
 let navTick=false;

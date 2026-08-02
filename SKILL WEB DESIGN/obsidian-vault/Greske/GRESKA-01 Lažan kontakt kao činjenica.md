@@ -18,3 +18,4 @@ Instagram — jedini potvrđen kanal. Upiše se pravi broj i stranica se povuče
 ## Vezano
 
 - [[MJERA-12 Revizija `src/` prije ispravki|📊 MJERA-12 — Revizija `src/` prije ispravki]]
+- [[OTV-02 ~~Neprovjereni podaci na stranici~~ · RIJEŠENO 02.08.2026.|🚧 OTV-02 — ~~Neprovjereni podaci na stranici~~ · RIJEŠENO 02.08.2026.]]

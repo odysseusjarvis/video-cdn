@@ -1,161 +1,95 @@
-# AUTOELEKTRIKA E-DRIVE — Web kontekst
+# Autoelektrika E-Drive — Web kontekst
+> Auto-generirana dokumentacija iz javnih online izvora. Namjena: kontekst za AI agenta koji gradi web stranicu. Svi podaci su činjenični; recenzije parafrazirane. Generirano skillom "business-web-research".
 
-> Kontekstni dokument za AI agenta koji gradi stranicu.
-> Svi podaci su činjenični; recenzije su parafrazirane. Napravljeno 2026-08-02.
-> Skill: `business-web-research` v2.0.0
+## 0. Meta
+- Meta pretrage: "E-Drive servis" + "Gradačac" (identifikator: IG @edrive.servis, adresa Sarajevska bb)
+- Sigurnost identifikacije: **VISOKA** — adresa (Sarajevska bb, Gradačac) i telefon (062/844-979) poklapaju se na Instagramu, Facebooku, Kupci.com i službenom registru Akta.ba.
+- Datum prikupljanja: 2026-08-02
+- Pregledani izvori: Google pretraga, Instagram, Facebook, Kupci.com, Akta.ba (registar)
 
----
-
-## 0. Meta istraživanja
-
-- **Datum**: 2026-08-02
-- **Pouzdanost identifikacije**: **visoka** — Instagram `@edrive.servis` se u pretrazi
-  pojavljuje kao „Autoelektrika E-Drive", a grad Gradačac potvrđen kroz upit korisnika.
-- **Korištena prečka pristupa** (§5a skilla): **5 — upload korisnika** (još nije stigao)
-
-### Rute koje su probane i pale
-
-| Ruta | Ishod |
-|---|---|
-| `WebSearch "E-Drive autoelektrika Gradačac"` | radi — vraća **samo IG link**, nula sadržaja |
-| `WebSearch` akta.ba / registar | **nema** E-Drive Gradačac u rezultatima |
-| `WebFetch` instagram.com/edrive.servis | **HTTP 429** |
-| `curl` preko proxyja | **HTTP 200, 606 KB — samo JS ljuska.** `<title>Instagram</title>`, nijedan `og:` meta tag, nijedan post JSON |
-| Headless Chromium (Playwright, `/opt/pw-browsers/chromium-1194`) | **`ERR_CONNECTION_RESET` na svaki host**, i na example.com — sandbox nema izlaz za browser |
-| `r.jina.ai`, `imginn.com`, `picuki.com` | **HTTP 403** |
-| `web.archive.org` | blokiran |
-
-### Pregledani izvori
-
-- https://www.instagram.com/edrive.servis/ — **postoji, sadržaj nedostupan**
-- https://www.akta.ba/registar — pretraženo, **nema pogotka**
-- opšta web pretraga (3 upita) — **nema pogotka osim IG linka**
-
-### Sekcije prazne zbog blokiranog izvora
-
-§1 (osim imena i djelatnosti) · §2 kompletno · §3 · §4 · §5 · §6 · §7 · §8 (brojači)
-
-**Zaključak: E-Drive nema nijedan javno čitljiv izvor osim Instagrama, a Instagram
-se iz ovog kontejnera ne može pročitati.** Sve što slijedi u §10 je jedini put dalje.
-
----
-
-## 1. Osnovni podaci
-
-| Polje | Vrijednost | Izvor |
-|---|---|---|
-| Komercijalno ime | **Autoelektrika E-Drive** | IG naziv profila, iz pretrage |
-| Pravno ime (registar) | nije nađeno online | akta.ba — nema pogotka |
-| Vlasnik / kontakt osoba | nije nađeno online | — |
-| Djelatnost | **autoelektrika / auto-elektronika** | naziv profila |
-| Opis u jednoj rečenici | čeka upload — §10 | — |
-| Godina osnivanja | nije nađeno online | — |
+## 1. Osnovno
+- **Komercijalni naziv:** Autoelektrika E-Drive (E-Drive servis)
+- **Puni pravni naziv:** Obrtnička radnja "E-Drive", vl. Amar Hadžiahmetović, Gradačac
+- **Djelatnost (službeno):** Održavanje i popravak motornih vozila; specijalizacija: autoelektrika, dijagnostika, chip tuning i elektronska zaštita vozila.
+- **ID broj:** 4312031980000
+- **Otvoreno:** servis je počeo s radom 21.06. (najava na Facebooku)
+- **Kratki opis:** Moderan auto-servis specijaliziran za autoelektriku, dijagnostiku svih vozila, izradu ključeva, programiranje elektronike i pojačavanje snage (Stage tuning) — "sve na jednom mjestu".
 
 ## 2. Kontakt i lokacija
-
-| Polje | Vrijednost | Izvor |
-|---|---|---|
-| Adresa | **nije nađeno online** | — |
-| Grad / regija | **Gradačac, BiH** | navod korisnika |
-| Telefon | **nije nađeno online** | — |
-| E-mail | nije nađeno online | — |
-| Web | **nema ga** — Instagram je jedini kanal | — |
-| Radno vrijeme | **nije nađeno online** | — |
-| Google Maps | nije nađeno online | — |
+- **Adresa:** Sarajevska bb, 75320 Gradačac
+- **Kanton/Entitet:** Kanton Tuzla, Federacija BiH
+- **Telefon:** 062/844-979
+- **Instagram:** https://www.instagram.com/edrive.servis/
+- **Facebook:** Autoelektrika E-Drive (Gradacac)
+- **Email / web / Google Maps recenzije:** nije pronađeno online (Google Maps: 0 recenzija u vrijeme prikupljanja)
+- **Radno vrijeme:** Pon–Pet 08:00–16:00 · Sub 08:00–15:00 · Ned neradna
 
 ## 3. Usluge / proizvodi
+**Autoelektrika i dijagnostika**
+- Autoelektrika (sva vozila)
+- Dijagnostika za sva vozila
+- Popravke električnih kvarova
+- Programiranje i zamjena elektronike
+- Kodiranje
 
-**Čeka upload.** Osam usluga koje su trenutno na stranici (dijagnostika, chip tuning,
-klima, instalacije, senzori, starteri, alarmi i ključevi, moduli) **nisu preuzete ni sa
-jednog izvora** — napisane su na osnovu djelatnosti. Prije objave ih treba potvrditi
-ili zamijeniti onim što E-Drive stvarno radi.
+**Ključevi i zaštita**
+- Izrada ključeva
+- Ugradnja IGLA elektronske zaštite (anti-theft)
+- Aktivacije
+
+**Softver / tuning (Stage)**
+- Pojačavanje snage vozila (Stage 1)
+- AdBlue, SCR, DPF, EGR, TVA, SWIRL, FLAPS (OFF/delete)
+- Hot Start Fix, Vmax OFF
+
+**Dodatno**
+- Ugradnja originalnih OEM rikverc/parking kamera
+- Prerada i popravak farova (čišćenje, zaptivanje, montaža)
+- Rješavanje problema s klimom, ventilatorom, izduvnim sistemom
+
+_Cijene: nisu javno objavljene online._
 
 ## 4. Portfolio / primjeri radova
+- **BMW M3 Competition (2023):** OPF delete softverski, bez diranja ECU zaštite, bez check engine lampica.
+- **Audi SQ5 3.0 V6 TFSI (2015) — Stage 1:** Pop & Bang, Rev limiter OFF. Snaga 345→402 HP; Moment 440→520 Nm.
+- **Porsche Panamera (2017/2020):** otklonjen problem s klimom (u suradnji s partnerom dominanz.code).
+- **Citroën C5 (2011):** riješen problem s ventilatorom.
+- **BMW X2 U10 (2025) i BMW X5 (2023):** ugradnja IGLA elektronske zaštite.
+- **VW / Audi A4 B9.5:** ugradnja originalne OEM rikverc kamere.
+- **Prerada fara:** kompletna prerada, čišćenje komponenti, novo zaptivanje (alternativa skupoj zamjeni).
 
-Čeka upload — §10.
-
-## 5. Društveni dokaz
-
-Nije nađeno online. Nema Google Business profila u rezultatima, nema recenzija,
-nema ocjene. Broj pratilaca na Instagramu nije očitan (izvor blokiran).
+## 5. Social proof
+- Instagram: 470+ pratitelja, aktivan profil s redovnim objavama radova (44 lajka na istaknutim objavama).
+- Facebook: prisutan, najava otvaranja i usluga.
+- Google/Kupci.com ocjene: još nema recenzija online.
+- Parafrazirane poruke brenda o kvaliteti: naglasak na profesionalnom, brzom i pouzdanom radu, rješavanju kvarova bez nepotrebne zamjene skupih dijelova, i sigurnosti vozila.
 
 ## 6. Brend
+- **Logo:** "E-DRIVE" s naglašenim narančastim slovom "E", podnaslov "SERVIS".
+- **Boje:** tamna/crna pozadina (#0A0A0A), narančasto-žuti akcent (~#F5A623), bijeli tekst.
+- **Slogani:** "SVE NA JEDNOM MJESTU", "BUDITE SIGURNI U SVOJE VOZILO".
+- **Ton:** samopouzdan, stručan, performance/automotive, direktan ("kada se stvari urade kako treba — nema kompromisa").
 
-| Polje | Vrijednost |
-|---|---|
-| Logo | **nema ga** — trenutna stranica koristi tekstualni znak `E—DRIVE` |
-| Boje | nisu preuzete sa izvora; trenutna paleta (`#0D5A6E` petrol + `#C79A46` zlatna) je **odabir dizajnera, ne brend klijenta** |
-| Slogan | nije nađeno online; „Ne pogađamo. Mjerimo." je **napisano za stranicu**, nije njegovo |
-| Ton komunikacije | čeka upload — §10 |
+## 7. Vizuali (u istom folderu)
+- edrive-usluge-grafika.jpg — brendirana grafika s kompletnim popisom usluga — izvor: Instagram
+- edrive-radno-vrijeme.jpg — grafika radno vrijeme + kontakt — izvor: Instagram
+- edrive-slogan.jpg — brend/slogan "SVE NA JEDNOM MJESTU" — izvor: Instagram
+- edrive-bmw-m3.jpg — BMW M3 u radionici (primjer rada + ambijent) — izvor: Instagram
+- edrive-audi-sq5.jpg — Audi SQ5 Stage 1 (primjer rada + eksterijer radionice) — izvor: Instagram
 
-## 7. Vizuelni materijal
+## 8. Društvene mreže / izvori
+- Instagram: https://www.instagram.com/edrive.servis/
+- Facebook: Autoelektrika E-Drive (Gradacac)
+- Akta.ba registar: https://www.akta.ba/registar/497790/obrtnicka-radnja-e-drive-vl-amar-hadziahmetovic-gradacac
+- Kupci.com: profil "E Drive Servis Autoelektrika" (Automehaničar, Gradačac)
+- Partner IG (referenca rada): dominanz.code
 
-| # | Fajl | Kategorija (§4b) | Opis | Izvor |
-|---|---|---|---|---|
-| — | **nijedan** | — | Nijedna fotografija radionice, tima, vozila ni prije/poslije nije pribavljena. Animacija na stranici koristi **generički render automobila**, ne njegovu radionicu. | — |
-
-## 8. Društvene mreže i izvori
-
-| Platforma | URL | Pratioci / recenzije | Napomena |
-|---|---|---|---|
-| Instagram | https://www.instagram.com/edrive.servis/ | **neočitano** | jedini potvrđen kanal; sadržaj blokiran |
-| Google Business | nije nađen | — | ne pojavljuje se u pretrazi |
-| Facebook | nije nađen | — | — |
-| akta.ba | nema unosa | — | pretraženo |
-
----
-
-## 9. Preporuke za stranicu
-
-Ovo je jedini dio koji se smije pisati bez njegovih podataka — jer slijedi iz
-**situacije**, a ne iz izmišljenih činjenica.
-
-- **Predložene sekcije**: hero sa jednom animacijom preko cijelog prozora → usluge kao
-  boksovi koji se otvaraju → prije/poslije sa **njegovim** fotografijama → jedno pravilo
-  radionice kao citat → kontakt. (Trenutna struktura već je ovakva.)
-- **Paleta i stil**: tamna petrol osnova sa zlatnim akcentom radi dok nema njegovog
-  brenda; **čim stigne logo, paletu izvući iz njega**, ne obrnuto.
-- **CTA**: dok nema broja — **jedan** CTA, na Instagram DM. Čim broj stigne, primarni CTA
-  postaje `tel:`, a Instagram pada na sekundarni. Za lokalni servis poziv je konverzija.
-- **Ključne poruke**: dijagnostika prije zamjene dijela; nalaz prije popravke; mjerenje
-  umjesto pogađanja. Ovo je **hipoteza pozicioniranja**, ne njegova izjava — provjeriti
-  na uploadu i odbaciti ako se ne poklapa sa tonom njegovih objava.
-- **Ton copyja**: kratke rečenice, bez marketinškog naduvavanja, „ti" a ne „Vi" —
-  uobičajeno za zanatske servise na ovom tržištu. **Potvrditi iz njegovih objava.**
-- **Konkurencija**: u Gradačcu se u pretrazi pojavljuje Auto Servis Car Line
-  (http://carline.ba/) — opšti autoservis, ne direktan konkurent u autoelektrici.
-  Njihova stranica je statična i bez animacije; prostor za razliku je očigledan.
-
-### Šta se NE smije objaviti prije provjere
-
-Trenutno na stranici stoje **neprovjereni** podaci koje niko nije preuzeo sa izvora:
-
-- `Gradačac 76250` — poštanski broj nije potvrđen
-- `Pon–Pet 08–17 · Sub 08–13` — radno vrijeme **izmišljeno**
-- `OTVORENO DO 17:00`, `IZLAZAK NA TEREN`, `NALAZ ISTI DAN` — tvrdnje **izmišljene**
-- opisi svih 8 usluga — **napisani, ne preuzeti**
-
-Telefon je već uklonjen sa stranice: svako dugme sada vodi na Instagram, jer je to
-jedini kanal za koji je potvrđeno da postoji.
+## 9. Preporuka za web (za agenta)
+- **Sekcije:** Hero (logo + slogan + CTA "Pozovi 062/844-979") · Usluge (grid s ikonama, grupirano kao u §3) · Stage tuning/rezultati (istakni BMW M3 i Audi SQ5 s brojkama) · Galerija radova · O nama/radionica (vlasnik Amar Hadžiahmetović, obrt od početka rada) · Kontakt + radno vrijeme + mapa (Sarajevska bb, Gradačac) · Footer (tel, IG, FB).
+- **Primarna boja:** narančasto-žuta (#F5A623) · **Pozadina:** crna/tamna · **Tekst:** bijeli.
+- **Glavni CTA:** poziv/telefon (nema online booking-a) + poruka putem Instagrama.
+- **Ključne poruke:** "sve na jednom mjestu", stručnost i sigurnost, tuning s mjerljivim rezultatima, IGLA zaštita.
+- **Ton copyja:** samopouzdan, tehnički potkovan, kratke udarne rečenice.
 
 ---
-
-## 10. Šta još nedostaje — tačna lista za upload
-
-Pošalji ovo i dokument se popunjava do kraja. Svaki screenshot zamjenjuje jednu sekciju.
-
-| # | Šta | Popunjava |
-|---|---|---|
-| 1 | **1 screenshot zaglavlja profila** — bio, broj pratilaca i objava, kategorija, link | §1, §6, §8 |
-| 2 | **1–3 screenshota highlights-a** koji nabrajaju usluge, cijene ili radno vrijeme | §2, §3 |
-| 3 | **3–5 screenshota objava s najviše lajkova, sa vidljivim opisima** | §3, §4, §6 ton |
-| 4 | **1 par prije/poslije** (oba kadra iz carousel-a) | §4, §7 |
-| 5 | **Screenshot onoga što nosi telefon, adresu i radno vrijeme** | §2 |
-| 6 | **6–10 originalnih fotografija** po §4b: logo, eksterijer radionice, alat, gotov rad, tim | §7 |
-
-**Najvažnije od svega: tačan telefon.** Čim ga pošalješ, upisuje se na jedno mjesto
-u generatoru (`const PHONE`) i cijela stranica se povuče sama — nav, hero, popup i podnožje.
-
-Fotografije radionice su druga po važnosti: animacija trenutno vrti **generički auto**,
-a §4b traži njegove slike. Sa 12+ registrovanih snimaka istog objekta može se napraviti
-animacija od njegovog materijala umjesto od stock rendera.
+_Napomena: podaci iza plaćenog zida (Akta.ba) i eventualne dodatne recenzije nisu uključeni. Polja označena "nije pronađeno online" agent može zatražiti od vlasnika._

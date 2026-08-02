@@ -18,3 +18,5 @@ sagrađen na neprovjerenoj ruti pada tek na kraju, kad je najskuplje.
 - [[MJERA-01 Instagram iz kontejnera: nedostupan, pet ruta|📊 MJERA-01 — Instagram iz kontejnera: nedostupan, pet ruta]]
 - [[MJERA-02 Chromium u ovom kontejneru nema izlaz na mrežu|📊 MJERA-02 — Chromium u ovom kontejneru nema izlaz na mrežu]]
 - [[MJERA-03 Chromium binarka nije ona koju Playwright očekuje|📊 MJERA-03 — Chromium binarka nije ona koju Playwright očekuje]]
+- [[MJERA-05 Pretraga iz kontejnera: nula pogodaka *(izvori ipak postoje)*|📊 MJERA-05 — Pretraga iz kontejnera: nula pogodaka *(izvori ipak postoje)*]]
+- [[MJERA-15 Prečka 5 je jedina koja je isporučila podatke|📊 MJERA-15 — Prečka 5 je jedina koja je isporučila podatke]]

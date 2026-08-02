@@ -10,6 +10,7 @@ tags: [moc]
 
 - [[00-NAJVAZNIJE]]
 - [[KORISNIK]]
+- [[edrive-info]]
 - [[edrive-web-kontekst]]
 
 ## Greske (16)
@@ -31,13 +32,13 @@ tags: [moc]
 - [[GRESKA-15 Reducirani pokret: dva teksta jedan preko drugog|🐞 GRESKA-15 — Reducirani pokret: dva teksta jedan preko drugog]]
 - [[GRESKA-16 Fiksni nav preko trake ispod njega|🐞 GRESKA-16 — Fiksni nav preko trake ispod njega]]
 
-## Mjerenja (14)
+## Mjerenja (15)
 
 - [[MJERA-01 Instagram iz kontejnera: nedostupan, pet ruta|📊 MJERA-01 — Instagram iz kontejnera: nedostupan, pet ruta]]
 - [[MJERA-02 Chromium u ovom kontejneru nema izlaz na mrežu|📊 MJERA-02 — Chromium u ovom kontejneru nema izlaz na mrežu]]
 - [[MJERA-03 Chromium binarka nije ona koju Playwright očekuje|📊 MJERA-03 — Chromium binarka nije ona koju Playwright očekuje]]
 - [[MJERA-04 Gemini ključ iz okruženja: 401|📊 MJERA-04 — Gemini ključ iz okruženja: 401]]
-- [[MJERA-05 Javnih izvora o E-Drive Gradačac: nula|📊 MJERA-05 — Javnih izvora o E-Drive Gradačac: nula]]
+- [[MJERA-05 Pretraga iz kontejnera: nula pogodaka *(izvori ipak postoje)*|📊 MJERA-05 — Pretraga iz kontejnera: nula pogodaka *(izvori ipak postoje)*]]
 - [[MJERA-06 61,5 MB transkripta = 219 KB kičme (**0,36%**)|📊 MJERA-06 — 61,5 MB transkripta = 219 KB kičme (**0,36%**)]]
 - [[MJERA-07 Raspodjela poziva alata|📊 MJERA-07 — Raspodjela poziva alata]]
 - [[MJERA-08 Materijal animacije|📊 MJERA-08 — Materijal animacije]]
@@ -47,11 +48,12 @@ tags: [moc]
 - [[MJERA-12 Revizija `src/` prije ispravki|📊 MJERA-12 — Revizija `src/` prije ispravki]]
 - [[MJERA-13 PR #1|📊 MJERA-13 — PR #1]]
 - [[MJERA-14 Statička mapa ikona: izmjereni dobitak|📊 MJERA-14 — Statička mapa ikona: izmjereni dobitak]]
+- [[MJERA-15 Prečka 5 je jedina koja je isporučila podatke|📊 MJERA-15 — Prečka 5 je jedina koja je isporučila podatke]]
 
 ## Otvoreno (6)
 
-- [[OTV-01 E-Drive nema nijedan podatak osim imena|🚧 OTV-01 — E-Drive nema nijedan podatak osim imena]]
-- [[OTV-02 Neprovjereni podaci koji trenutno stoje na stranici|🚧 OTV-02 — Neprovjereni podaci koji trenutno stoje na stranici]]
+- [[OTV-01 ~~E-Drive nema nijedan podatak~~ · RIJEŠENO 02.08.2026.|🚧 OTV-01 — ~~E-Drive nema nijedan podatak~~ · RIJEŠENO 02.08.2026.]]
+- [[OTV-02 ~~Neprovjereni podaci na stranici~~ · RIJEŠENO 02.08.2026.|🚧 OTV-02 — ~~Neprovjereni podaci na stranici~~ · RIJEŠENO 02.08.2026.]]
 - [[OTV-03 Gemini kao dugi kontekst nije dostupan|🚧 OTV-03 — Gemini kao dugi kontekst nije dostupan]]
 - [[OTV-04 Repozitorij nema nijedan CI workflow|🚧 OTV-04 — Repozitorij nema nijedan CI workflow]]
 - [[OTV-05 Isporuka na Desktop se ne može uraditi direktno|🚧 OTV-05 — Isporuka na Desktop se ne može uraditi direktno]]

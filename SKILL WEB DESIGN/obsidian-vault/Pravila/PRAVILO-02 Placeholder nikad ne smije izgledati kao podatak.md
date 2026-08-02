@@ -17,5 +17,5 @@ Uvjerljiv placeholder se objavi jer niko ne primijeti da nije stvaran.
 
 - [[GRESKA-01 Lažan kontakt kao činjenica|🐞 GRESKA-01 — Lažan kontakt kao činjenica]]
 - [[MJERA-12 Revizija `src/` prije ispravki|📊 MJERA-12 — Revizija `src/` prije ispravki]]
-- [[OTV-01 E-Drive nema nijedan podatak osim imena|🚧 OTV-01 — E-Drive nema nijedan podatak osim imena]]
-- [[OTV-02 Neprovjereni podaci koji trenutno stoje na stranici|🚧 OTV-02 — Neprovjereni podaci koji trenutno stoje na stranici]]
+- [[OTV-01 ~~E-Drive nema nijedan podatak~~ · RIJEŠENO 02.08.2026.|🚧 OTV-01 — ~~E-Drive nema nijedan podatak~~ · RIJEŠENO 02.08.2026.]]
+- [[OTV-02 ~~Neprovjereni podaci na stranici~~ · RIJEŠENO 02.08.2026.|🚧 OTV-02 — ~~Neprovjereni podaci na stranici~~ · RIJEŠENO 02.08.2026.]]
