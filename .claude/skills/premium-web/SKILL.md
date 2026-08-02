@@ -141,7 +141,7 @@ Decide once, at step 7, from three counts: routes `R`, existing editable source 
 |---|---|
 | `industry-playbooks.md` | Step 1, 6 — picking and locking the trade row, motion verb, section order, anti-patterns |
 | `animation-recipes.md` | Step 4, 9 — the routing algorithm and R1–R10 implementations |
-| `tool-ladder.md` | Step 2 — free→paid table, 14 stages × 4 tiers, zero-budget column |
+| `tool-ladder.md` | Step 2 — free→paid table, 13 stages × 4 tiers, zero-budget column |
 | `asset-pipeline.md` | Step 3, 9 — harvest → triage → cutout → frames → compress |
 | `brand-identity.md` | Step 3, 5 — palette extraction, type pairing, mood, image-rights buckets |
 | `luxury-register.md` | Step 10 — what reads as expensive, the scorecard, AI-design anti-patterns |

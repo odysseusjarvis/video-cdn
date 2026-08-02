@@ -544,6 +544,16 @@ function paintParallax(ctx, store, p, dw, dh, fit, rates, amplitude) {
  * @property {string}    [className]
  * @property {string}    [sectionHeight='500vh']
  * @property {'cover'|'contain'} [fit='cover']
+ * @property {'cover'|'contain'} [mobileFit]  Fit used on the 'light' tier. Defaults to `fit`.
+ *   READ §8 "The portrait crop" in references/scrubber-component.md before leaving this unset.
+ *   A 16:9 frame cover-fitted into a 100svh pin on a 375×812 phone shows 26% of the source
+ *   width — measured, not estimated. The component warns in the console when it drops below
+ *   `cropWarnFraction`; the fix is `mobileFit="contain"`, a shorter `mobilePinHeight`, or a
+ *   portrait-cropped mobile ladder.
+ * @property {string}    [pinHeight='100svh']  Height of the sticky pin.
+ * @property {string}    [mobilePinHeight]     Pin height on the 'light' tier. Defaults to `pinHeight`.
+ * @property {number}    [cropWarnFraction=0.45] Warn when cover-fit shows less than this
+ *   fraction of the source frame's width. Set to 0 to silence.
  * @property {number}    [dprCap]            Overrides the tier's DPR cap.
  * @property {number}    [keyframeEvery=4]
  * @property {number}    [memoryBudgetMB=250]
@@ -581,6 +591,10 @@ export default function ScrollScrubber(props) {
     className = '',
     sectionHeight = '500vh',
     fit = 'cover',
+    mobileFit,
+    pinHeight = '100svh',
+    mobilePinHeight,
+    cropWarnFraction = 0.45,
     dprCap,
     keyframeEvery = 4,
     memoryBudgetMB = 250,
@@ -612,8 +626,29 @@ export default function ScrollScrubber(props) {
   const { tier, dprCap: tierDpr } = useDeviceTier();
   const effectiveDprCap = dprCap ?? tierDpr;
 
+  /* Tier-dependent presentation. `light` is the phone/low-memory tier; see
+     useDeviceTier. Both default to the desktop value, so an existing call site
+     behaves exactly as before. */
+  const effectiveFit = (tier === 'light' && mobileFit) || fit;
+  const effectivePinHeight = (tier === 'light' && mobilePinHeight) || pinHeight;
+
+  /* ---------------------------------------------------------------------
+     Array-literal default props (`scrollRange = [0.1, 0.65]`,
+     `parallaxRates = [1, 0.6, 0.3]`) get a BRAND-NEW identity on every render,
+     and a parent passing an inline array does the same. Fed straight into
+     useCallback deps they re-create draw → sizeCanvas → tick → start on every
+     render, which disconnects and rebuilds the IntersectionObserver AND the
+     ResizeObserver each time, and re-registers the DPR matchMedia listener.
+     Reduce them to primitives, and memo the rates array by VALUE.
+     --------------------------------------------------------------------- */
+  const rangeStart = scrollRange[0];
+  const rangeEnd = scrollRange[1];
+  const ratesKey = parallaxRates.join(',');
+  const rates = useMemo(() => ratesKey.split(',').map(Number), [ratesKey]);
+
   const [firstFrameReady, setFirstFrameReady] = useState(false);
   const firstDrawRef = useRef(false); // read inside draw() so draw stays stable
+  const cropWarnedRef = useRef(false); // portrait-crop diagnostic fires once
 
   /* ---- URL resolution, incl. D6 WebP negotiation and the mobile ladder ---- */
   const urls = useMemo(() => {
@@ -685,12 +720,13 @@ export default function ScrollScrubber(props) {
     const p = frameCount > 1 ? exactFloat / (frameCount - 1) : 0;
 
     ctx.clearRect(0, 0, dw, dh);
+    const f = effectiveFit;
     let ok = false;
-    if (mode === 'crossfade') ok = paintCrossfade(ctx, store, exactFloat, dw, dh, fit);
-    else if (mode === 'wipe') ok = paintWipe(ctx, store, p, dw, dh, fit, wipeDirection);
+    if (mode === 'crossfade') ok = paintCrossfade(ctx, store, exactFloat, dw, dh, f);
+    else if (mode === 'wipe') ok = paintWipe(ctx, store, p, dw, dh, f, wipeDirection);
     else if (mode === 'parallax')
-      ok = paintParallax(ctx, store, p, dw, dh, fit, parallaxRates, parallaxAmplitude);
-    else ok = paintScrub(ctx, store, exact, dw, dh, fit);
+      ok = paintParallax(ctx, store, p, dw, dh, f, rates, parallaxAmplitude);
+    else ok = paintScrub(ctx, store, exact, dw, dh, f);
 
     if (ok) {
       drawnRef.current = exact;
@@ -699,7 +735,7 @@ export default function ScrollScrubber(props) {
         setFirstFrameReady(true); // cross-fade poster -> canvas, once
       }
     }
-  }, [mode, fit, frameCount, wipeDirection, parallaxRates, parallaxAmplitude]);
+  }, [mode, effectiveFit, frameCount, wipeDirection, rates, parallaxAmplitude]);
 
   /* ---- Backing store sizing + D1 immediate redraw ---- */
   const sizeCanvas = useCallback(() => {
@@ -721,8 +757,31 @@ export default function ScrollScrubber(props) {
       canvas.style.height = `${cssH}px`;
       drawnRef.current = -1; // resizing clears the canvas: force a repaint
     }
+
+    /* THE PORTRAIT CROP, self-diagnosed. cover-fit crops the source to the
+       destination aspect. A 16:9 sequence in a full-height pin on a portrait
+       phone is the worst case in this whole component and it passes every
+       numeric gate — no overflow, no CLS, no budget breach — while showing a
+       quarter of the picture. Measure it and say so once. */
+    if (cropWarnFraction > 0 && effectiveFit === 'cover' && !cropWarnedRef.current) {
+      const sRatio = posterWidth / posterHeight;
+      const dRatio = cssW / cssH;
+      const visible = sRatio > dRatio ? dRatio / sRatio : sRatio / dRatio;
+      if (visible < cropWarnFraction) {
+        cropWarnedRef.current = true;
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn(
+            `[ScrollScrubber] cover-fit is showing ${(visible * 100).toFixed(0)}% of each ` +
+              `${posterWidth}×${posterHeight} frame in a ${cssW}×${cssH} pin. ` +
+              'Set mobileFit="contain", shorten mobilePinHeight, or ship a portrait-cropped ' +
+              'mobile ladder — see references/scrubber-component.md §8 "The portrait crop".'
+          );
+        }
+      }
+    }
+
     draw(); // <-- D1: never leave the canvas blank after a resize
-  }, [draw, effectiveDprCap]);
+  }, [draw, effectiveDprCap, effectiveFit, cropWarnFraction, posterWidth, posterHeight]);
 
   /* ---- Build the FrameStore and run the loading ladder (D2) ---- */
   useEffect(() => {
@@ -817,9 +876,8 @@ export default function ScrollScrubber(props) {
       if (onProgressRef.current) onProgressRef.current(raw);
     }
 
-    const [rs, re] = scrollRange;
-    const span = Math.max(1e-6, re - rs);
-    const mapped = clamp((raw - rs) / span, 0, 1);
+    const span = Math.max(1e-6, rangeEnd - rangeStart);
+    const mapped = clamp((raw - rangeStart) / span, 0, 1);
     targetRef.current = mapped * Math.max(0, frameCount - 1);
 
     const diff = targetRef.current - curRef.current;
@@ -842,7 +900,7 @@ export default function ScrollScrubber(props) {
     if (activeRef.current && (!settled || dirtyRef.current)) {
       rafRef.current = requestAnimationFrame(tick);
     }
-  }, [draw, frameCount, lerp, mode, scrollRange]);
+  }, [draw, frameCount, lerp, mode, rangeStart, rangeEnd]);
 
   const start = useCallback(() => {
     if (rafRef.current || !activeRef.current) return;
@@ -926,8 +984,8 @@ export default function ScrollScrubber(props) {
   const pinStyle = {
     position: 'sticky',
     top: 0,
-    height: '100svh',
-    minHeight: '100vh',
+    height: effectivePinHeight,
+    minHeight: effectivePinHeight === '100svh' ? '100vh' : undefined,
     overflow: 'clip',
     isolation: 'isolate',
   };
@@ -942,7 +1000,7 @@ export default function ScrollScrubber(props) {
         className={className}
         data-pw-scrubber="static"
         data-pw-reason={reduced ? 'reduced-motion' : tier === 'poster' ? 'save-data' : 'no-frames'}
-        style={{ position: 'relative', height: '100svh', ...style }}
+        style={{ position: 'relative', height: effectivePinHeight, ...style }}
       >
         <div ref={pinRef} style={{ ...pinStyle, '--pw-progress': '1' }}>
           <img
@@ -958,7 +1016,7 @@ export default function ScrollScrubber(props) {
               inset: 0,
               width: '100%',
               height: '100%',
-              objectFit: fit,
+              objectFit: effectiveFit,
             }}
           />
           {children}
@@ -978,7 +1036,19 @@ export default function ScrollScrubber(props) {
         {/* LCP element + CLS guard. A <canvas> is NOT an LCP candidate, so the
             poster must be a real <img> with explicit width/height. In a
             client-rendered SPA also add, to index.html <head>:
-            <link rel="preload" as="image" href="<poster>" fetchpriority="high"> */}
+            <link rel="preload" as="image" href="<poster>" fetchpriority="high">
+
+            THE POSTER IS NEVER FADED OUT. It stays at opacity 1 for the life of
+            the page, underneath the canvas, and the CANVAS fades in on top of it.
+            An earlier version cross-faded the poster to 0 the moment the first
+            frame painted, which looks identical and costs you LCP: an element
+            whose opacity reaches 0 is disqualified as a largest-contentful-paint
+            candidate, so on a fast connection — where the canvas wins the race —
+            LCP silently hands off to whatever text is on screen and the poster you
+            spent the byte budget on stops being measured at all. scripts/verify.mjs
+            catches exactly this as HERO-LCP-CANDIDATE. Keeping it painted also
+            removes one animated layer and gives 'parallax' (alpha canvas) and
+            fit="contain" (letterbox) a real backdrop instead of page background. */}
         <img
           src={poster}
           alt={ariaLabel}
@@ -992,10 +1062,7 @@ export default function ScrollScrubber(props) {
             inset: 0,
             width: '100%',
             height: '100%',
-            objectFit: fit,
-            opacity: firstFrameReady ? 0 : 1,
-            transition: 'opacity 320ms linear',
-            willChange: 'opacity',
+            objectFit: effectiveFit,
           }}
         />
         <canvas
