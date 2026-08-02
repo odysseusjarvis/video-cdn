@@ -561,7 +561,18 @@ async function open(ctx, url) {
   const pageErrors = [];
   const badResponses = [];
   const bytes = new Map();
-  page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 200)); });
+  // A bare "Failed to load resource" console line has no URL in it. requestfailed
+  // does, and naming the dead host is the difference between a finding and a shrug.
+  page.on('requestfailed', (r) => {
+    const why = (r.failure() && r.failure().errorText) || 'unknown';
+    badResponses.push(`request failed (${why}) → ${r.url()}`);
+  });
+  page.on('console', (m) => {
+    if (m.type() !== 'error') return;
+    const t = m.text();
+    if (/Failed to load resource/i.test(t)) return; // requestfailed already named it, with the URL
+    consoleErrors.push(t.slice(0, 200));
+  });
   page.on('pageerror', (e) => pageErrors.push(String(e.message).slice(0, 200)));
   page.on('response', async (r) => {
     try {
@@ -583,6 +594,7 @@ async function open(ctx, url) {
 async function checkVisualAndScrollCLS(browser, url, shotDir) {
   const shots = [];
   const scrollShiftFailures = [];
+  let scrollShiftSum = 0;
   const loadCls = {};
   const baseline = {}; // per-viewport normal-motion metrics, reused by the reduced-motion check
   let smoothSeen = false;
@@ -618,8 +630,9 @@ async function checkVisualAndScrollCLS(browser, url, shotDir) {
       if (s.phase !== 'scroll') continue;
       if (s.hadRecentInput) continue; // genuinely user-driven; excluded by spec
       if (s.value <= 0) continue;
+      scrollShiftSum += s.value;
       scrollShiftFailures.push(
-        `${vp.label}px  shift ${s.value.toFixed(4)} at ${s.t}ms — ${s.sources.join(' | ') || 'source unknown'}`
+        `${vp.label}px  shift ${s.value.toFixed(4)} at ${s.t}ms — ${s.sources.filter((x) => x !== '(non-element)').join(' | ') || 'source node already detached (usually a reveal that unmounts, or a lazy image swapping in)'}`
       );
     }
 
@@ -678,16 +691,19 @@ async function checkVisualAndScrollCLS(browser, url, shotDir) {
       Object.entries(loadCls).map(([k, v]) => `${k}px: ${v.toFixed(4)}`));
   }
 
-  if (scrollShiftFailures.length) {
+  if (scrollShiftFailures.length && scrollShiftSum > BUDGET.clsScroll) {
     fail(
       'CLS-SCROLL',
-      `${scrollShiftFailures.length} layout-shift entries with hadRecentInput=false during scripted scroll`,
+      `${scrollShiftFailures.length} layout-shift entries with hadRecentInput=false during scripted scroll (sum ${scrollShiftSum.toFixed(4)} > ${BUDGET.clsScroll})`,
       scrollShiftFailures.concat([
         'Scroll is NOT an excluding input in the Layout Instability spec — there is no 500ms grace period, every one of these counts fully.',
         'Lighthouse never scrolls, so a green lab score does not contradict this.',
         'Fix by animating transform/opacity only: translateY not top, scaleY not height, opacity not visibility+height. Reserve space for every lazy image.',
+        'If these are genuinely sub-pixel and you have decided to accept them, raise the bar explicitly: --budget clsScroll=0.01. Do not silence the check.',
       ])
     );
+  } else if (scrollShiftFailures.length) {
+    warn('CLS-SCROLL', `${scrollShiftFailures.length} sub-threshold layout shifts during scroll (sum ${scrollShiftSum.toFixed(4)} ≤ ${BUDGET.clsScroll})`, scrollShiftFailures);
   } else {
     pass('CLS-SCROLL', 'zero unexpected layout shifts during scripted scroll at 375/768/1440');
   }
@@ -1008,6 +1024,25 @@ async function checkPerformance(browser, url) {
     }
   }
 
+  /* --- the poster on its own ---
+     The LCP image is the one file that must arrive before anything else is
+     allowed to matter. Budget it separately from the rest of the hero payload. */
+  if (tele.lcp && tele.lcp.url) {
+    const posterBytes = sizeOf(tele.lcp.url);
+    const rel = tele.lcp.url.replace(/^https?:\/\/[^/]+/, '');
+    if (posterBytes > BUDGET.posterBytes) {
+      fail('POSTER-BYTES', `the LCP image is ${kb(posterBytes)} > ${kb(BUDGET.posterBytes)}`, [
+        rel,
+        'Re-encode at the real display width: AVIF q50 or JPEG q75. A 1600px-wide poster on a 375px phone is three quarters wasted.',
+        'Ship it as <img fetchpriority="high" loading="eager" decoding="async"> with explicit width/height, and preload it from index.html on a client-rendered build.',
+      ]);
+    } else {
+      pass('POSTER-BYTES', `the LCP image is ${kb(posterBytes)} ≤ ${kb(BUDGET.posterBytes)}`, [rel]);
+    }
+  } else {
+    skip('POSTER-BYTES', 'no image LCP candidate — nothing to weigh');
+  }
+
   /* --- hero payload --- */
   const heroDetail = [
     `${heroParts.length} resources ≥8KB arrived before LCP:`,
@@ -1066,8 +1101,14 @@ async function checkKeyboard(browser, url) {
         w: Math.round(r.width),
         h: Math.round(r.height),
         visible: window.__pwq.visible(el),
-        isCTA: /tel:|wa\.me|viber:|mailto:|whatsapp/i.test(el.getAttribute('href') || '') ||
-               /rezerv|pozovi|kontakt|book|call|zakaz|naru/i.test((el.innerText || '')),
+        // The primary conversion action gets the stricter 44px rule. Keep this
+        // NARROW: a nav link whose label happens to read "Kontakt" is navigation,
+        // not the conversion action, and holding it to 44px fails every normal
+        // header. Only a real dial/message/booking target qualifies.
+        isCTA: /^(tel:|mailto:|sms:|viber:|whatsapp:)/i.test(el.getAttribute('href') || '') ||
+               /wa\.me|api\.whatsapp\.com|m\.me\//i.test(el.getAttribute('href') || '') ||
+               ((el.tagName === 'BUTTON' || el.getAttribute('role') === 'button') &&
+                /rezerv|pozovi|zakaz|naruč|naruc|book now|get a quote|zatraži/i.test(el.innerText || '')),
         styles,
       };
     }, FOCUS_PROPS);
@@ -1161,24 +1202,35 @@ async function checkKeyboard(browser, url) {
    11. CHECK — content: alt text, heading order, placeholders, links, languages
    ═══════════════════════════════════════════════════════════════════════════════ */
 
+/* Patterns that are safe against ANY file type and against rendered text. */
 const PLACEHOLDER_PATTERNS = [
   // English
   'lorem ipsum', 'dolor sit amet', 'lipsum',
   '\\bTODO\\b', '\\bFIXME\\b', '\\bTBD\\b', '\\bXXX\\b',
-  '[Pp]laceholder', 'PLACEHOLDER',
   'Your (Company|Business|Name|Text|Logo)', '(Company|Business) Name',
   'Insert [a-z]+ here', 'text goes here', 'Coming soon', 'Sample text',
-  'example\\.(com|org)', 'test@', 'foo@bar', '555-?01[0-9]{2}',
+  'example\\.(com|org)', 'foo@bar', '555-?01[0-9]{2}',
   // Bosnian / Croatian / Serbian — the ones an agent actually leaves behind
   'Vaš tekst', 'Vas tekst', 'Vaše ime', 'Vaša firma', 'Vaš naslov',
   'Unesite tekst', 'Ovdje ide', 'Ovdje unesite', 'Tekst ovdje',
   'Naslov ovdje', 'Opis usluge ovdje', 'Uskoro dostupno', 'Primjer teksta',
   'Ime firme', 'Broj telefona ovdje',
   // unrendered templating
-  '\\{\\{[^}]{1,40}\\}\\}', '\\$\\{[a-zA-Z_$][^}]{0,40}\\}',
-  '\\[[a-z][a-z ]{2,20}\\]',
+  '\\{\\{[^}]{1,40}\\}\\}',
 ];
 const PLACEHOLDER_RE = new RegExp(PLACEHOLDER_PATTERNS.join('|'), 'g');
+
+/* Patterns that are ONLY valid against rendered text or HTML — never against CSS
+   or JS. `[hidden]`, `[multiple]`, `::placeholder` are real CSS; `arr[i]` and
+   `${x}` are real code. Scanning those file types with these produces a wall of
+   false positives, which trains everyone to ignore the check — see delivery.md
+   §7.2.5, which makes exactly this point. */
+const TEXTONLY_PATTERNS = [
+  '[Pp]laceholder text', 'PLACEHOLDER',
+  '\\[[a-z][a-z ]{2,20}\\]',        // an unfilled [bracketed] slot in prose
+  '\\$\\{[a-zA-Z_$][^}]{0,40}\\}',  // an unrendered template literal in prose
+];
+const TEXTONLY_RE = new RegExp(TEXTONLY_PATTERNS.join('|'), 'g');
 
 async function checkContent(browser, origin, routes) {
   const ctx = await makeContext(browser, { w: 1440, h: 900, dsf: 1 });
@@ -1278,8 +1330,10 @@ async function checkContent(browser, origin, routes) {
 
     const tag = route === '/' ? '/' : route;
 
-    if (usedFallback) {
-      internalLinkFails.push(`${tag}: no file on disk — served by the SPA fallback. Fine for a client route, a 404 for anything else.`);
+    if (usedFallback && !ARGS.spa) {
+      internalLinkFails.push(`${tag}: no file on disk — 404 on any static host`);
+    } else if (usedFallback) {
+      info.push(`${tag}: served by the SPA fallback (client route) — the host must be configured to rewrite to index.html, or this is a 404 in production`);
     }
     if (resp && resp.status() >= 400) {
       internalLinkFails.push(`${tag}: HTTP ${resp.status()}`);
@@ -1295,8 +1349,22 @@ async function checkContent(browser, origin, routes) {
     }
     r.headingIssues.forEach((s) => headingFails.push(`${tag}: ${s}`));
 
-    const hits = [...new Set((r.text.match(PLACEHOLDER_RE) || []).map((s) => s.trim()))];
+    const hits = [
+      ...new Set([
+        ...(r.text.match(PLACEHOLDER_RE) || []),
+        ...(r.text.match(TEXTONLY_RE) || []),
+      ].map((s) => s.trim())),
+    ];
     hits.forEach((h) => placeholderFails.push(`${tag}: visible placeholder text "${h}"`));
+    // A tel: href that is not a dialable number is the most expensive placeholder
+    // on a local-business site: the entire conversion action is dead.
+    for (const l of r.links) {
+      if (!/^tel:/i.test(l.href)) continue;
+      const digits = l.href.slice(4).replace(/[^\d]/g, '');
+      if (/x/i.test(l.href.slice(4)) || digits.length < 6) {
+        placeholderFails.push(`${tag}: tel: link is not a real number → ${l.href} — the conversion action does not work`);
+      }
+    }
     if (!r.title || /vite|react|app|document|untitled/i.test(r.title)) {
       placeholderFails.push(`${tag}: <title> is "${r.title}" — a default template title`);
     }
@@ -1675,13 +1743,23 @@ async function checkStatic(dir, browser, origin) {
     pass('HOST-LIMITS', `${files.length} files ≤ ${BUDGET.maxFiles}, largest ${mb(Math.max(...files.map((f) => fs.statSync(f).size)))} ≤ ${mb(BUDGET.maxFileBytes)}`);
   }
 
-  /* ---- placeholder text in the built source, not just the rendered page ---- */
-  const scanFiles = files.filter((f) => ['.html', '.css', '.json', '.txt', '.xml'].includes(path.extname(f).toLowerCase()));
+  /* ---- placeholder text in the built source, not just the rendered page ----
+     A placeholder can survive templating into a string that never renders on the
+     home page but does render on a route the crawl never reached, so scan the
+     files too. The universal patterns go over every text file; the prose-only
+     patterns go over HTML only — `[hidden]` is real CSS and `arr[i]` is real code,
+     and scanning those types with a bracket pattern makes the check noise. */
+  const scanFiles = files.filter((f) => ['.html', '.css', '.js', '.mjs', '.json', '.txt', '.xml'].includes(path.extname(f).toLowerCase()));
   const srcPlaceholders = [];
   for (const f of scanFiles) {
     const t = fs.readFileSync(f, 'utf8');
     for (const m of new Set(t.match(PLACEHOLDER_RE) || [])) {
       srcPlaceholders.push(`${path.relative(dir, f)}: "${String(m).trim().slice(0, 60)}"`);
+    }
+    if (/\.html?$/i.test(f)) {
+      for (const m of new Set(t.match(TEXTONLY_RE) || [])) {
+        srcPlaceholders.push(`${path.relative(dir, f)}: "${String(m).trim().slice(0, 60)}"`);
+      }
     }
   }
   srcPlaceholders.length

@@ -1,0 +1,646 @@
+/* ==========================================================================
+   scroll-reveal.css — premium-web skill
+   The cheap 80%: every NON-HERO section's scroll motion, as pure CSS.
+   The hero canvas is assets/ScrollScrubber.jsx; nothing here touches a canvas.
+
+   Zero dependencies. Zero JS required for the enhanced tier.
+   ~7 KB unminified, ~1.4 KB gzipped. Drop it in whole; unused blocks cost nothing.
+
+   --------------------------------------------------------------------------
+   THREE TIERS. Read this before editing anything below.
+   --------------------------------------------------------------------------
+   TIER 1  base            The RESTING state. Fully visible, untransformed. This is
+                           what Firefox stable, pre-26 Safari, no-JS, print and
+                           crawlers get. It must already look finished.
+   TIER 2  @supports       CSS scroll-driven enhancement (Chrome/Edge 115+, Safari 26+).
+                           Runs off the main thread. Sets the "before" state.
+   TIER 3  .pw-js + IO     IntersectionObserver one-shot entrance for Tier-1 browsers.
+                           Load-bearing path, not a nicety: `animation-timeline` is
+                           ~84% global and NOT Baseline. Firefox stable ships it only
+                           behind layout.css.scroll-driven-animations.enabled, and the
+                           bulk of the unsupported cohort is iOS Safari < 26 — i.e.
+                           the phones your client's customers actually hold.
+
+   THE INVARIANT: the hidden state (opacity:0 / transform / clip-path) is applied
+   ONLY inside @supports, or ONLY under the .pw-js class that JS adds after it has
+   confirmed it can also un-hide. Write `opacity: 0` in the base layer and every
+   non-supporting visitor gets a permanently blank section. That is the single
+   most common way an agency ships a broken site.
+
+   --------------------------------------------------------------------------
+   THE #1 BUG — DECLARATION ORDER
+   --------------------------------------------------------------------------
+   `animation-timeline` and `animation-range` are RESET-ONLY longhands: the
+   `animation` shorthand silently resets both to their initial values
+   (`auto` / `normal`). Declare them AFTER the shorthand, always:
+
+       animation: pw-rise linear both;         <-- 1. shorthand FIRST
+       animation-timeline: view();             <-- 2. timeline AFTER
+       animation-range: entry 10% cover 35%;   <-- 3. range AFTER
+
+   Every block below obeys this. If you add one, obey it too.
+   (The arrows above are not CSS comments on purpose. CSS comments DO NOT NEST:
+   a nested comment opener inside this banner is ignored, and the FIRST nested
+   closer ends the whole banner — the rest of it then falls into the parser as
+   garbage and takes the next rules down with it. Verified the hard way: it silently
+   killed the :root token block below and every custom property with it. Never put
+   a comment inside a comment in this file.)
+   Related: `animation-delay` is IGNORED on a scroll-driven timeline (delay is
+   time-based, the timeline is progress-based). Stagger with `animation-range-start`,
+   never with a delay — see .pw-stagger.
+
+   --------------------------------------------------------------------------
+   SAFARI COMPOSITOR ALLOWLIST (26.4+)
+   --------------------------------------------------------------------------
+   Only these run off the main thread in a scroll-driven animation:
+       opacity, transform, translate, scale, rotate, filter, backdrop-filter,
+       and the Motion Path properties (offset-path/offset-distance/offset-rotate).
+   A scroll-driven animation on width, height, color, background-position,
+   stroke-dashoffset or clip-path SILENTLY falls back to the main thread. Two
+   blocks below deliberately use non-allowlist properties because there is no
+   transform equivalent — .pw-draw (stroke-dashoffset) and .pw-wipe (clip-path).
+   Both are documented at their definition, both are single-element effects, and
+   .pw-wipe ships a transform-based twin (.pw-wipe--tx) for when it is not.
+   Never animate a layout property (top/left/width/height/margin) on scroll: scroll
+   is NOT an excluding input in the Layout Instability spec, so there is no 500 ms
+   grace period and every shift counts fully against CLS.
+
+   --------------------------------------------------------------------------
+   TIER-3 BOOTSTRAP — paste this once, in your entry module
+   --------------------------------------------------------------------------
+   It adds `.pw-js` to <html> only when it can also un-hide, adds `.is-visible`
+   (and `.is-in`, the class used by references/scroll-effects.md §0.5 — both are
+   honoured everywhere below, so the two files interoperate), and does nothing at
+   all under prefers-reduced-motion.
+
+     (function () {
+       var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+       if (reduce || !('IntersectionObserver' in window)) return;   // Tier 1 stands
+       document.documentElement.classList.add('pw-js');
+       var io = new IntersectionObserver(function (entries, obs) {
+         entries.forEach(function (e) {
+           if (!e.isIntersecting) return;
+           e.target.classList.add('is-visible');
+           obs.unobserve(e.target);                                  // one-shot
+         });
+       }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+       document.querySelectorAll('[data-reveal]').forEach(function (el) { io.observe(el); });
+     })();
+
+   MARKUP RULE: put `data-reveal` on the element you want observed and the effect
+   class on the same element — EXCEPT for .pw-wipe. `clip-path` makes
+   IntersectionObserver blind: IO computes the intersection rect AFTER clipping, so
+   a fully-clipped element reports intersectionRatio 0 wherever it sits on screen,
+   the observer never fires, and it stays hidden forever. For .pw-wipe put
+   `data-reveal` on the UNCLIPPED wrapper (.pw-wipe) and the clip on the inner
+   (.pw-wipe__inner). This file is written so that follows naturally.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   0. Tokens
+   -------------------------------------------------------------------------- */
+:root {
+  --pw-rise: 2rem;          /* travel distance for reveals */
+  --pw-slide: 3rem;         /* travel distance for lateral reveals */
+  --pw-dur: 0.72s;          /* Tier-3 transition duration */
+  --pw-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --pw-stagger-step: 4%;    /* range-start increment per staggered child */
+  --pw-stagger-delay: 70ms; /* Tier-3 equivalent of the above */
+  --pw-parallax: 8%;        /* parallax drift, as a % of the element's own box */
+  --pw-stage-h: 300vh;      /* .pw-stage height = how long a pin lasts */
+}
+
+/* --------------------------------------------------------------------------
+   1. TIER 1 — resting states. Everything is visible. Do not add hidden states here.
+   -------------------------------------------------------------------------- */
+.pw-reveal,
+.pw-stagger > *,
+.pw-scale,
+.pw-blur,
+.pw-kenburns__img,
+.pw-parallax__layer {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+.pw-wipe { position: relative; }
+.pw-wipe__inner { display: block; clip-path: none; }
+
+.pw-draw path,
+.pw-draw line,
+.pw-draw polyline,
+.pw-draw circle,
+.pw-draw rect,
+.pw-draw ellipse {
+  stroke-dashoffset: 0; /* fully drawn is the resting state */
+}
+
+/* Shared: promote only what is actually animated, and only while it animates. */
+.pw-reveal,
+.pw-stagger > *,
+.pw-scale,
+.pw-parallax__layer,
+.pw-kenburns__img {
+  will-change: auto; /* deliberately NOT transform — see note in §9 */
+}
+
+/* --------------------------------------------------------------------------
+   2. TIER 2 — native scroll-driven enhancement
+   Everything is inside BOTH `@supports (animation-timeline: view())` AND
+   `@media (prefers-reduced-motion: no-preference)`, so:
+     • non-supporting browsers never see a hidden state, and
+     • reduced-motion users never see a hidden state either, regardless of what
+       any keyframe's `to` state happens to be.
+   -------------------------------------------------------------------------- */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* 2.1 Reveal — fade and rise. The workhorse. Section headings, paragraphs,
+       cards, images. Ends in its resting state, so it is safe under any global
+       reduced-motion override. */
+    .pw-reveal {
+      opacity: 0;
+      animation: pw-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 35%;
+    }
+    .pw-reveal--left  { animation-name: pw-rise-left; }
+    .pw-reveal--right { animation-name: pw-rise-right; }
+    .pw-reveal--fade  { animation-name: pw-fade; }
+    .pw-reveal--late  { animation-range: entry 30% cover 55%; }
+    .pw-reveal--early { animation-range: entry 0% entry 90%; }
+
+    /* 2.2 Scale settle — for imagery and pull-quotes. */
+    .pw-scale {
+      opacity: 0;
+      animation: pw-scale-in linear both;
+      animation-timeline: view();
+      animation-range: entry 5% cover 40%;
+    }
+
+    /* 2.3 Blur settle — `filter` IS on Safari's compositor allowlist, but blur is
+       the most expensive thing on it. Use on ONE element per page, never on a grid. */
+    .pw-blur {
+      opacity: 0;
+      animation: pw-blur-in linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 40%;
+    }
+
+    /* 2.4 Stagger — children enter in sequence.
+       `animation-delay` does NOT work on a scroll timeline. The stagger comes
+       from shifting each child's animation-range-start by --i × --pw-stagger-step.
+       Set --i per child in markup: <li style="--i:0">…<li style="--i:1">.
+       No JS, no per-child selector explosion. */
+    .pw-stagger > * {
+      opacity: 0;
+      animation: pw-rise linear both;
+      animation-timeline: view();
+      /* NOTE the syntax: the range NAME sits outside the calc(). `animation-range-start:
+         calc(entry 8% + …)` is invalid CSS and is silently dropped — the keyword is a
+         separate token, only the <length-percentage> may be calculated. */
+      animation-range-start: entry calc(8% + var(--i, 0) * var(--pw-stagger-step));
+      animation-range-end: cover 45%;
+    }
+    /* Same idea, but the whole group is driven by the PARENT's view timeline, so
+       children stagger even when they all enter the viewport together (a wide row). */
+    .pw-stagger--group { view-timeline-name: --pw-group; view-timeline-axis: block; }
+    .pw-stagger--group > * {
+      animation-timeline: --pw-group;
+      animation-range-start: entry calc(5% + var(--i, 0) * var(--pw-stagger-step));
+    }
+
+    /* 2.5 Pin — a tall section whose child sticks for the length of the scroll.
+       `position: sticky` is Widely Available, so the PIN itself is Tier 1; only the
+       motion inside it is enhanced. The `contain` view-range of .pw-stage is exactly
+       the period during which .pw-stage__pin is stuck — a free 1:1 mapping. */
+    .pw-stage__fill {
+      animation: pw-fill linear both;
+      animation-timeline: --pw-stage;
+      animation-range: contain 0% contain 100%;
+    }
+    .pw-stage__zoom {
+      animation: pw-stage-zoom linear both;
+      animation-timeline: --pw-stage;
+      animation-range: contain 0% contain 100%;
+    }
+    /* Panels inside a pin: each fades up, holds, fades out.
+       `pw-step` ENDS AT opacity 0 — a non-resting `to` state — which is exactly why
+       this whole block is gated on `no-preference`. Under reduced motion a global
+       "duration: 0.001ms" override would snap it to its `to` keyframe and leave a
+       pinned, empty viewport. Gated, it simply never applies. */
+    .pw-stage__panel {
+      opacity: 0;
+      animation: pw-step linear both;
+      animation-timeline: --pw-stage;
+      animation-range-start: contain calc(var(--i, 0) * (100% / var(--n, 3)));
+      animation-range-end: contain calc((var(--i, 0) + 1) * (100% / var(--n, 3)));
+    }
+
+    /* 2.6 Clip-path wipe — before/after and image unmask.
+       clip-path is NOT on Safari's compositor allowlist: this runs on the main
+       thread. That is acceptable for ONE element (it is one composited layer's
+       clip, not a layout change, so it costs no CLS). For anything repeated, use
+       .pw-wipe--tx below, which is a transform on a mask and IS composited. */
+    .pw-wipe__inner {
+      clip-path: inset(0 100% 0 0);
+      animation: pw-wipe-x linear both;
+      animation-timeline: view();
+      animation-range: entry 15% cover 50%;
+    }
+    .pw-wipe--up .pw-wipe__inner   { clip-path: inset(100% 0 0 0); animation-name: pw-wipe-y; }
+    .pw-wipe--down .pw-wipe__inner { clip-path: inset(0 0 100% 0); animation-name: pw-wipe-y-down; }
+
+    /* Compositor-safe twin: a solid overlay slides off instead of the image being
+       clipped. Same read, transform-only, safe to repeat across a grid. */
+    .pw-wipe--tx .pw-wipe__inner { clip-path: none; animation: none; }
+    .pw-wipe--tx .pw-wipe__cover {
+      transform: translate3d(0, 0, 0);
+      animation: pw-cover-off linear both;
+      animation-timeline: view();
+      animation-range: entry 15% cover 50%;
+    }
+
+    /* 2.7 SVG line draw — the best effort-to-impact ratio available.
+       stroke-dashoffset is not compositor-eligible either, but it is one path and
+       there is no transform equivalent. Set --pw-len to the path length
+       (getTotalLength(), or just any number ≥ the true length; overshoot is invisible). */
+    .pw-draw path,
+    .pw-draw line,
+    .pw-draw polyline,
+    .pw-draw circle,
+    .pw-draw rect,
+    .pw-draw ellipse {
+      stroke-dasharray: var(--pw-len, 1200);
+      stroke-dashoffset: var(--pw-len, 1200);
+      animation: pw-draw-line linear both;
+      animation-timeline: view();
+      animation-range: entry 20% cover 60%;
+    }
+    .pw-draw--stage path { animation-timeline: --pw-stage; animation-range: contain 0% contain 90%; }
+
+    /* 2.8 Parallax drift — ONE layer, transform only, small amplitude.
+       Two or more layers reads as a gimmick; one reads as depth. */
+    .pw-parallax { position: relative; overflow: clip; }
+    .pw-parallax__layer {
+      animation: pw-drift linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 100%;
+    }
+
+    /* 2.9 Ken Burns on view — scale only, compositor-safe everywhere. */
+    .pw-kenburns { overflow: clip; }
+    .pw-kenburns__img {
+      animation: pw-kenburns linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 100%;
+    }
+
+    /* 2.10 Reading-progress bar. Driven by the document scroll timeline, not view(). */
+    .pw-progress {
+      transform-origin: 0 50%;
+      transform: scaleX(0);
+      animation: pw-progress-x linear both;
+      animation-timeline: scroll(root block);
+    }
+
+    /* 2.11 Sticky header shrink. Opacity/transform only — never animate height. */
+    .pw-shrink {
+      animation: pw-shrink-in linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 240px;
+    }
+
+    /* 2.12 Stacking cards. Each card sticks, then the next scales it back.
+       transform + opacity only. */
+    .pw-stack__card {
+      animation: pw-stack linear both;
+      animation-timeline: view();
+      animation-range: exit 0% exit 100%;
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   3. TIER 3 — IntersectionObserver fallback
+   Only applies when (a) native scroll timelines are unavailable, (b) the bootstrap
+   has added .pw-js (so JS is alive and IO exists), and (c) motion is welcome.
+   One-shot entrances only: no scrubbing, no pinning motion, no parallax — those
+   would need a scroll listener, and a scroll listener on the main thread is exactly
+   what this whole file exists to avoid.
+   -------------------------------------------------------------------------- */
+@supports not (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .pw-js .pw-reveal,
+    .pw-js .pw-stagger > *,
+    .pw-js .pw-scale,
+    .pw-js .pw-blur {
+      opacity: 0;
+      transition:
+        opacity var(--pw-dur) var(--pw-ease),
+        transform var(--pw-dur) var(--pw-ease),
+        filter var(--pw-dur) var(--pw-ease);
+    }
+    .pw-js .pw-reveal          { transform: translate3d(0, var(--pw-rise), 0); }
+    .pw-js .pw-reveal--left    { transform: translate3d(calc(-1 * var(--pw-slide)), 0, 0); }
+    .pw-js .pw-reveal--right   { transform: translate3d(var(--pw-slide), 0, 0); }
+    .pw-js .pw-reveal--fade    { transform: none; }
+    .pw-js .pw-stagger > *     { transform: translate3d(0, var(--pw-rise), 0);
+                                 transition-delay: calc(var(--i, 0) * var(--pw-stagger-delay)); }
+    .pw-js .pw-scale           { transform: scale(0.94); }
+    .pw-js .pw-blur            { filter: blur(12px); transform: scale(1.02); }
+
+    /* Both class names are honoured: `.is-visible` (this file's bootstrap) and
+       `.is-in` (references/scroll-effects.md §0.5 `revealOnce`). Mix freely. */
+    .pw-js .pw-reveal.is-visible,
+    .pw-js .pw-reveal.is-in,
+    .pw-js .pw-scale.is-visible,
+    .pw-js .pw-scale.is-in,
+    .pw-js .pw-blur.is-visible,
+    .pw-js .pw-blur.is-in,
+    .pw-js .pw-stagger.is-visible > *,
+    .pw-js .pw-stagger.is-in > *,
+    .pw-js .pw-stagger > *.is-visible,
+    .pw-js .pw-stagger > *.is-in {
+      opacity: 1;
+      transform: none;
+      filter: none;
+    }
+
+    /* Wipe: the clip lives on the INNER element, the observer watches the wrapper.
+       Never put data-reveal on a clipped element — IO goes blind to it. */
+    .pw-js .pw-wipe__inner {
+      clip-path: inset(0 100% 0 0);
+      transition: clip-path var(--pw-dur) var(--pw-ease);
+    }
+    .pw-js .pw-wipe--up .pw-wipe__inner   { clip-path: inset(100% 0 0 0); }
+    .pw-js .pw-wipe--down .pw-wipe__inner { clip-path: inset(0 0 100% 0); }
+    .pw-js .pw-wipe.is-visible .pw-wipe__inner,
+    .pw-js .pw-wipe.is-in .pw-wipe__inner { clip-path: inset(0 0 0 0); }
+
+    .pw-js .pw-wipe--tx .pw-wipe__inner { clip-path: none; }
+    .pw-js .pw-wipe--tx .pw-wipe__cover {
+      transform: translate3d(0, 0, 0);
+      transition: transform var(--pw-dur) var(--pw-ease);
+    }
+    .pw-js .pw-wipe--tx.is-visible .pw-wipe__cover,
+    .pw-js .pw-wipe--tx.is-in .pw-wipe__cover { transform: translate3d(101%, 0, 0); }
+
+    /* Line draw: same dash trick, time-based instead of scrubbed. */
+    .pw-js .pw-draw path,
+    .pw-js .pw-draw line,
+    .pw-js .pw-draw polyline,
+    .pw-js .pw-draw circle,
+    .pw-js .pw-draw rect,
+    .pw-js .pw-draw ellipse {
+      stroke-dasharray: var(--pw-len, 1200);
+      stroke-dashoffset: var(--pw-len, 1200);
+      transition: stroke-dashoffset 1.4s var(--pw-ease);
+    }
+    .pw-js .pw-draw.is-visible path,
+    .pw-js .pw-draw.is-in path,
+    .pw-js .pw-draw.is-visible line,
+    .pw-js .pw-draw.is-in line,
+    .pw-js .pw-draw.is-visible polyline,
+    .pw-js .pw-draw.is-in polyline,
+    .pw-js .pw-draw.is-visible circle,
+    .pw-js .pw-draw.is-in circle,
+    .pw-js .pw-draw.is-visible rect,
+    .pw-js .pw-draw.is-in rect,
+    .pw-js .pw-draw.is-visible ellipse,
+    .pw-js .pw-draw.is-in ellipse { stroke-dashoffset: 0; }
+
+    /* Ken Burns without a scroll timeline: a slow one-shot on entry. */
+    .pw-js .pw-kenburns__img { transform: scale(1); transition: transform 3.2s linear; }
+    .pw-js .pw-kenburns.is-visible .pw-kenburns__img,
+    .pw-js .pw-kenburns.is-in .pw-kenburns__img { transform: scale(1.06); }
+
+    /* Deliberately NOT emulated in Tier 3: .pw-parallax, .pw-progress, .pw-shrink,
+       .pw-stack, .pw-stage__panel. They need a continuous scroll signal; a main-thread
+       scroll listener costs more than the effect is worth on the exact devices that
+       land in this tier. They keep their Tier-1 resting state and look correct. */
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. Structural primitives — Tier 1, no animation, work everywhere.
+   `position: sticky`, `overflow: clip` and `aspect-ratio` are all Widely Available,
+   so the PIN is never an enhancement. Only the motion inside it is.
+   -------------------------------------------------------------------------- */
+.pw-stage {
+  position: relative;
+  height: var(--pw-stage-h, 300vh);
+  view-timeline-name: --pw-stage;   /* inert where unsupported; harmless */
+  view-timeline-axis: block;
+}
+.pw-stage__pin {
+  position: sticky;
+  top: 0;
+  height: 100svh;          /* svh: no jump when the mobile URL bar collapses */
+  min-height: 100vh;       /* fallback for engines without svh */
+  display: grid;
+  place-items: center;
+  overflow: clip;          /* clip, not hidden — hidden creates a scroll container */
+}
+.pw-stage__panel { grid-area: 1 / 1; }
+
+.pw-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 3px;
+  z-index: 60;
+  background: currentColor;
+  transform-origin: 0 50%;
+}
+
+.pw-stack { display: grid; }
+.pw-stack__card { position: sticky; top: var(--pw-stack-top, 10vh); }
+
+.pw-kenburns,
+.pw-parallax { overflow: clip; }
+.pw-kenburns__img,
+.pw-parallax__layer { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+.pw-wipe__cover {
+  position: absolute;
+  inset: 0;
+  background: var(--pw-cover, #0b0b0c);
+  pointer-events: none;
+}
+
+/* Focus must never be lost inside a pinned section: when the browser scrolls a
+   focused CTA into view it also drives every scroll timeline on the page. */
+.pw-stage :is(a, button, input, select, textarea, [tabindex]):focus-visible {
+  scroll-margin-top: 12vh;
+  scroll-margin-bottom: 12vh;
+}
+
+/* --------------------------------------------------------------------------
+   5. Keyframes. Transform / opacity / filter only, with two documented exceptions
+   (pw-draw-line: stroke-dashoffset, pw-wipe-*: clip-path). No layout property
+   appears anywhere in this file.
+   -------------------------------------------------------------------------- */
+@keyframes pw-rise        { from { opacity: 0; transform: translate3d(0, var(--pw-rise), 0); }
+                            to   { opacity: 1; transform: translate3d(0, 0, 0); } }
+@keyframes pw-rise-left   { from { opacity: 0; transform: translate3d(calc(-1 * var(--pw-slide)), 0, 0); }
+                            to   { opacity: 1; transform: translate3d(0, 0, 0); } }
+@keyframes pw-rise-right  { from { opacity: 0; transform: translate3d(var(--pw-slide), 0, 0); }
+                            to   { opacity: 1; transform: translate3d(0, 0, 0); } }
+@keyframes pw-fade        { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pw-scale-in    { from { opacity: 0; transform: scale(0.94); }
+                            to   { opacity: 1; transform: scale(1); } }
+@keyframes pw-blur-in     { from { opacity: 0; filter: blur(12px); transform: scale(1.02); }
+                            to   { opacity: 1; filter: blur(0); transform: scale(1); } }
+@keyframes pw-fill        { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes pw-stage-zoom  { from { transform: scale(1); }  to { transform: scale(1.12); } }
+@keyframes pw-step        { 0% { opacity: 0; transform: translate3d(0, 3vh, 0); }
+                            18%, 82% { opacity: 1; transform: translate3d(0, 0, 0); }
+                            100% { opacity: 0; transform: translate3d(0, -3vh, 0); } }
+@keyframes pw-wipe-x      { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes pw-wipe-y      { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes pw-wipe-y-down { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes pw-cover-off   { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(101%, 0, 0); } }
+@keyframes pw-draw-line   { from { stroke-dashoffset: var(--pw-len, 1200); } to { stroke-dashoffset: 0; } }
+@keyframes pw-drift       { from { transform: translate3d(0, calc(-1 * var(--pw-parallax)), 0); }
+                            to   { transform: translate3d(0, var(--pw-parallax), 0); } }
+@keyframes pw-kenburns    { from { transform: scale(1); } to { transform: scale(1.08); } }
+@keyframes pw-progress-x  { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes pw-shrink-in   { from { transform: translate3d(0, 0, 0); opacity: 1; }
+                            to   { transform: translate3d(0, -25%, 0) scale(0.94); opacity: 0.97; } }
+@keyframes pw-stack       { from { transform: scale(1); opacity: 1; }
+                            to   { transform: scale(0.92); opacity: 0.55; } }
+
+/* --------------------------------------------------------------------------
+   6. REDUCED MOTION — the end state, instantly. Never nothing.
+   prefers-reduced-motion does not mean "remove the design". It means: no travel,
+   no parallax, no scrub, no loops. The content must be complete and finished the
+   moment the section is on screen.
+
+   Tier 2 and Tier 3 above are already gated on `no-preference`, so in principle
+   nothing here should be needed. This block exists anyway, because a hidden state
+   arriving from ANOTHER stylesheet, a component's inline style, or a partial copy
+   of this file must not be able to leave a section blank. Defence in depth.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .pw-reveal,
+  .pw-stagger > *,
+  .pw-scale,
+  .pw-blur,
+  .pw-kenburns__img,
+  .pw-parallax__layer,
+  .pw-stage__panel,
+  .pw-stack__card,
+  .pw-shrink,
+  .pw-wipe__inner,
+  [data-reveal] {
+    animation: none !important;
+    animation-timeline: auto !important;
+    animation-range: normal !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    clip-path: none !important;
+  }
+
+  /* The cover overlay of the transform wipe would otherwise sit over the image. */
+  .pw-wipe__cover { display: none !important; }
+
+  /* Lines are drawn, not drawing. */
+  .pw-draw :is(path, line, polyline, circle, rect, ellipse) {
+    animation: none !important;
+    transition: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+
+  /* A pinned section with no motion in it is just a tall empty scroll region.
+     Collapse every stage to one viewport and let the panels stack as content. */
+  .pw-stage { height: auto !important; }
+  .pw-stage__pin {
+    position: static !important;
+    height: auto !important;
+    min-height: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+  .pw-stage__panel {
+    position: static !important;
+    grid-area: auto !important;
+    margin-block: 2rem;
+  }
+  .pw-stack__card { position: static !important; }
+
+  /* The reading-progress bar is scroll-linked motion the user did not ask for. */
+  .pw-progress { display: none !important; }
+
+  /* Kill decorative infinite loops — pulsing glows and bouncing chevrons are
+     exactly the vestibular triggers WCAG 2.3.3 targets, and they are always the
+     ones nobody remembers to gate because nobody calls them "the animation". */
+  .pw-pulse,
+  .pw-bounce,
+  .pw-float,
+  .pw-marquee {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  html { scroll-behavior: auto !important; }
+}
+
+/* --------------------------------------------------------------------------
+   7. Forced colors / high contrast — decorative overlays must not eat the content.
+   -------------------------------------------------------------------------- */
+@media (forced-colors: active) {
+  .pw-wipe__cover { display: none; }
+  .pw-progress { background: Highlight; }
+  .pw-draw :is(path, line, polyline, circle, rect, ellipse) { stroke: CanvasText; }
+}
+
+/* --------------------------------------------------------------------------
+   8. Touch / coarse-pointer tuning.
+   Small screens get shorter travel (large travel on a 390px viewport reads as
+   jitter, not elegance) and shorter pins (a 300vh stage is 6 thumb-swipes).
+   Hover-only affordances must never be the sole route to information.
+   -------------------------------------------------------------------------- */
+@media (hover: none), (pointer: coarse) {
+  :root {
+    --pw-rise: 1.1rem;
+    --pw-slide: 1.5rem;
+    --pw-parallax: 4%;
+    --pw-stage-h: 200vh;
+  }
+  .pw-blur { filter: none; }                 /* blur is too expensive on mid Android */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .pw-blur { animation-name: pw-fade; }  /* same intent, a fraction of the cost */
+    }
+  }
+}
+
+/* Very small viewports: no pin at all. A sticky 200vh stage on a 320px phone is a
+   scroll trap; the panels are better as ordinary stacked content. */
+@media (max-width: 380px) {
+  .pw-stage { height: auto; }
+  .pw-stage__pin { position: static; height: auto; min-height: 0; display: block; overflow: visible; }
+  .pw-stage__panel { grid-area: auto; margin-block: 1.5rem; }
+}
+
+/* --------------------------------------------------------------------------
+   9. Notes you will want in six months
+   • `will-change: transform` on 40 cards costs memory and can REDUCE framerate.
+     Scroll-driven animations are already composited; leave will-change alone.
+   • `animation-fill-mode: both` is mandatory on every scrubbed animation, or the
+     element snaps back outside its range. Every block above uses `both`.
+   • Always `linear` for scrubbed animations. An ease curve on a scroll timeline
+     feels like the page is fighting the user's finger. Ease is for the one-shot
+     Tier-3 transitions only — hence --pw-ease appears only in §3.
+   • View ranges are computed from the UNTRANSFORMED box, so your scale()/translate()
+     never feeds back into the range. That is a feature: no layout loops.
+   • A named view-timeline is visible to the declaring element and its DESCENDANTS.
+     Reach for `timeline-scope` only when the animated element is a sibling or
+     ancestor of the scroller.
+   • Taste budget: two, maybe three of these effects on a whole page. A local
+     business with eleven effects looks like a template; the same business with one
+     perfect pinned sequence looks expensive.
+   -------------------------------------------------------------------------- */
