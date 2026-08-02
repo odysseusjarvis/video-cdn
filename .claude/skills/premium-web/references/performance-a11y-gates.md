@@ -79,7 +79,7 @@ must land *first*. At 1.6 Mbps, 1.5 MB is 7.5 seconds. Split it.
 | Thing | Budget | Notes | Check ID |
 |---|---|---|---|
 | **Everything transferred before LCP** | **≤ 400 KB** | HTML + critical CSS + JS + poster + 2 woff2. This is the number that decides whether the hero exists in under 2.5 s. | `HERO-PAYLOAD` |
-| Poster image alone | ≤ 80 KB | The single LCP image. AVIF q50 or JPEG q75 at the real display width. | `HERO-PAYLOAD` detail |
+| Poster image alone | ≤ 80 KB | The single LCP image. AVIF q50 or JPEG q75 at the real display width. | `POSTER-BYTES` |
 | Keyframe subset (the 15–20 frames that make the scrub usable) | ≤ 250 KB | Loads after the poster, before the remainder. | manual, from the frames manifest |
 | Frame sequence remainder, mobile | up to 1.5 MB total | `fetchpriority="low"` on `requestIdleCallback`, after `load`. | `PAGE-PAYLOAD` |
 | Frame sequence, desktop | ≤ 4 MB | | `PAGE-PAYLOAD` with `--budget pageBytesDesktop` |

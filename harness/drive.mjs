@@ -224,6 +224,65 @@ for (const mode of ['crossfade', 'wipe', 'parallax']) {
   await ctx.close();
 }
 
+/* ─────── 4b. SLIDING DECODED-FRAME WINDOW (forced on via a 20 MB budget) ─────── */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
+  const page = await ctx.newPage();
+  const dbg = [];
+  const errs = [];
+  page.on('console', (m) => { if (m.text().includes('[ScrollScrubber]')) dbg.push(m.text()); });
+  page.on('pageerror', (e) => errs.push(e.message));
+  await page.goto(`${BASE}/?mode=scrub&budget=20`, { waitUntil: 'load' });
+  await page.waitForTimeout(900);
+
+  // Forward, then far backward past the evicted edge, then forward again.
+  const seq = [];
+  for (const p of [0.12, 0.3, 0.5, 0.64, 0.2, 0.12, 0.55]) {
+    await scrollToProgress(page, p);
+    const s = await heroSignature(page);
+    // A blank canvas reads as mean 0 (cleared) or 255 (white fill). The frames are
+    // light-grey studio shots, so anything under 40 means we drew nothing.
+    seq.push({ p, hash: s.hash, mean: s.mean, blank: s.mean < 40 });
+  }
+  await page.screenshot({ path: path.join(OUT, 'window-backscrub.png') });
+  const blanks = seq.filter((s) => s.blank).length;
+  log('SLIDING WINDOW:', dbg.join(' | '));
+  log('  scrub path', seq.map((s) => `${s.p}:${s.mean}`).join(' '), `blankDraws=${blanks} errors=${errs.length}`);
+  report.window = { dbg, seq, blanks, errs };
+  await ctx.close();
+}
+
+/* ─────── 4c. saveData TERMINAL TIER: poster only, no sequence fetched ─────── */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
+  await ctx.addInitScript(() => {
+    Object.defineProperty(navigator, 'connection', {
+      configurable: true,
+      get: () => ({ saveData: true, effectiveType: '3g', addEventListener() {}, removeEventListener() {} }),
+    });
+  });
+  const page = await ctx.newPage();
+  const frameReqs = [];
+  page.on('request', (r) => { if (/\/frames\/frame-\d+\.jpg/.test(r.url())) frameReqs.push(r.url()); });
+  await page.goto(`${BASE}/?mode=scrub`, { waitUntil: 'load' });
+  await page.waitForTimeout(1200);
+  const st = await page.evaluate(() => {
+    const sec = document.querySelector('[data-pw-scrubber]');
+    return {
+      dataMode: sec.getAttribute('data-pw-scrubber'),
+      reason: sec.getAttribute('data-pw-reason'),
+      canvases: sec.querySelectorAll('canvas').length,
+      sectionH: Math.round(sec.getBoundingClientRect().height),
+    };
+  });
+  await page.screenshot({ path: path.join(OUT, 'savedata-poster.png') });
+  // The preload in index.html legitimately fetches frame-00; the SEQUENCE must not.
+  const seqReqs = frameReqs.filter((u) => !u.endsWith('frame-00.jpg'));
+  log('SAVE-DATA TIER:', JSON.stringify(st), `sequenceFrameRequests=${seqReqs.length} (preload frame-00 excluded)`);
+  report.saveData = { ...st, frameReqs: frameReqs.length, seqReqs: seqReqs.length };
+  await ctx.close();
+}
+
 /* ───────────────── 5. scroll-reveal.css page ───────────────── */
 {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });

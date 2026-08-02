@@ -4,7 +4,10 @@ import ScrollScrubber from './ScrollScrubber.jsx';
 
 // Real assets: the 60 frames shipped in this repo at /public/images/car/frames/.
 // They are 2-digit padded (frame-00.jpg ... frame-59.jpg), so pad={2} here.
-const MODE = new URLSearchParams(location.search).get('mode') || 'scrub';
+const Q = new URLSearchParams(location.search);
+const MODE = Q.get('mode') || 'scrub';
+// Force the sliding decoded-frame window on by lowering the memory budget.
+const BUDGET = Q.has('budget') ? Number(Q.get('budget')) : 250;
 
 function App() {
   const [p, setP] = useState(0);
@@ -32,6 +35,7 @@ function App() {
         lerp={0.08}
         sectionHeight="500vh"
         keyframeEvery={4}
+        memoryBudgetMB={BUDGET}
         posterWidth={1280}
         posterHeight={720}
         ariaLabel="Automobil se rastavlja u slojeve dok skrolate"
