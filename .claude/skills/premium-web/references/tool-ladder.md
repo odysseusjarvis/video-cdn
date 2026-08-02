@@ -357,7 +357,7 @@ const sharp = require('./work/tools/node_modules/sharp'), fs = require('fs');
 | Tier | Tool | Cost 2026 | Unattended? | What you give up vs the tier above |
 |---|---|---|---|---|
 | **T0** | **IntersectionObserver + CSS transitions** as the load-bearing path, with native **`animation-timeline: view()/scroll()`** layered on **behind `@supports`** as progressive enhancement. | $0, 0 KB | **Yes** | Timeline scrubbing, pinning, and complex sequencing. For reveals, progress bars, sticky shrink and stacking cards you give up nothing — and the native path runs off the main thread. |
-| **T1** | **GSAP 3.15 + ScrollTrigger** — **100% free including every formerly-paid plugin** (MorphSVG, DrawSVG, SplitText, ScrollSmoother, Observer, Flip) **since Webflow made it free in April 2025**. Measured: **45 KB gzipped** for gsap + ScrollTrigger (27 + 17). | $0 | **Yes** | T0 gives up: pinning, timeline scrubbing, `matchMedia()` breakpoint branching that auto-reverts, and SplitText. 45 KB is a real cost against a 120 KB JS budget — spend it on the hero only. |
+| **T1** | **GSAP 3.15 + ScrollTrigger** — **100% free including every formerly-paid plugin** (MorphSVG, DrawSVG, SplitText, ScrollSmoother, Observer, Flip) **since Webflow made it free in April 2025**. Measured on gsap 3.15.0, `zlib.gzipSync(level:9)` over the shipped `dist/*.min.js`: gsap **27.7 KB** + ScrollTrigger **17.6 KB** = **45.3 KB gzipped**. | $0 | **Yes** | T0 gives up: pinning, timeline scrubbing, `matchMedia()` breakpoint branching that auto-reverts, and SplitText. 45 KB is a real cost against a 120 KB JS budget — spend it on the hero only. |
 | **T2** | Lenis (MIT, <4 KB) for smooth scroll — import from `lenis/react` | $0 | Yes | Not a step up; a separate, **optional and risky** addition. See caveat. |
 | **T3** | Motion+ (~£299 one-time) | £299 one-time | Yes | T1 gives up: **examples, not capability.** Not needed. |
 
@@ -472,6 +472,16 @@ const browser = await chromium.launch({
 
 **Caveats, verified:**
 
+- **NEVER screenshot this skill's output with `animations: 'disabled'`.** It is the obvious way to make a capture deterministic and it silently destroys the evidence. Playwright's documented rule is *finite animations fast-forward to completion, infinite animations are cancelled to their initial state* — and a CSS animation driven by `animation-timeline: view()` has `duration: auto`, so it takes the **second** branch and is rewound to its `from` keyframe. Every `.pw-reveal` in `assets/scroll-reveal.css` starts at `opacity: 0`. Measured on a fixture that links that stylesheet and has one `<h1 class="pw-reveal" data-reveal>` at 72px, black on white — Chromium 141.0.7390.37, viewport 1440×900, scroll position 0, counting pixels darker than 200/255 inside the `<h1>`'s own bounding box:
+
+  | screenshot option | headline ink px |
+  |---|---|
+  | `animations: 'allow'` | **14,841** |
+  | `animations: 'disabled'` | **0** |
+
+  The ink total depends on your headline's text and size; the **0** does not, and it is 0 for every reveal on the page. Reproduce it before you trust it — and if you want the end-to-end version, patch `scripts/verify.mjs` back to `animations: 'disabled'`, re-run it over a built site and look at `shots/1440-p000.png`: headline and lede gone, only the non-revealed CTA left.
+
+  So the one step in the whole skill that *looks* at the page hands you a page with the headings missing, and you then "fix" a design that was never broken. `scripts/verify.mjs` now calls `settleAnimations(page)` before every capture and screenshots with `animations: 'allow'`: it reproduces Playwright's semantics for **time-driven** animations (finite → `finish()`, infinite → rewind to 0 and pause) and **skips anything on a `ViewTimeline`/`ScrollTimeline`**, whose state is a pure function of scroll position and therefore already deterministic once the scroll has settled. If you write your own capture script, copy that function — do not reach for the flag.
 - **Do not run `playwright install` or `npx playwright install --with-deps`.** The browser is already on disk. Downloading another copy wastes minutes and may fail behind the proxy.
 - **`--no-sandbox` is required** in this container.
 - **Route cross-origin page traffic through Playwright's Node fetcher** when the page loads external resources — Chromium's own stack is often blocked even with `HTTPS_PROXY` set. Exact snippet in `delivery.md` §0.2. Never proxy `127.0.0.1`.
@@ -535,6 +545,7 @@ Do not reach for these. Each entry cost someone real time to discover.
 | **Lucide UMD builds** | **Dropped in v1.0** | ESM only. |
 | **`moviepy` for frame extraction** | **Wrong tool** | Breaking 2.x API, lagging docs, Pillow conflicts. Call the ffmpeg binary. |
 | **`playwright install` in this container** | **Unnecessary and may fail** | Chromium 141 is already at `/opt/pw-browsers/chromium-1194/`. |
+| **`screenshot({ animations: 'disabled' })` on scroll-driven pages** | **Silently blanks the evidence** | Treats a `view()`/`scroll()` timeline animation as infinite and rewinds it to its `from` keyframe, so every reveal captures at `opacity: 0` — measured **0** headline ink px against 14,841 with `'allow'`. Use `settleAnimations()` + `animations: 'allow'` (Stage 13 caveats). |
 | **`lighthouse` preinstalled** | **Not present** | `npx lighthouse` wants to download it. Playwright fallback in `delivery.md` §7.2.2. |
 | **Native `animation-timeline` as a load-bearing path** | **Not baseline** | ~83.66% global; Firefox stable still flagged. Enhancement only, behind `@supports`. |
 | **Free anonymous AI video generation, generally** | **Collapsed** | See §4.2. Plan around processing, not generation. |

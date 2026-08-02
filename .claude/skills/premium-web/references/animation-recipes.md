@@ -789,15 +789,27 @@ await s.clone().resize(1200, 630, { fit:'cover' }).jpeg({ quality: 80, mozjpeg: 
 
 ```js
 import { scrubProgress } from './progress.js';
+
+/* Run the JS driver ONLY where the native timeline does not exist. Both at once is not
+   belt-and-braces, it is a silent cascade conflict: a filling CSS animation lives in the
+   animation origin, which outranks the inline style scrubProgress writes, so in Chromium the
+   `ease: 0.12` smoothing and `restAt: 0.5` are computed away and you ship an rAF loop that
+   changes nothing. Measured: with a view() animation on the same element, an inline `--p`
+   reads back as the animated value unless it is set `!important`. */
 const plx = document.querySelector('.plx');
-if (plx) scrubProgress(plx, { ease: 0.12, restAt: 0.5 });   // restAt 0.5 = the mid-state composite
+const NATIVE = CSS.supports('animation-timeline: view()');
+if (plx && !NATIVE) scrubProgress(plx, { ease: 0.12, restAt: 0.5 });   // restAt 0.5 = the mid-state composite
 ```
 
 ### Reduced-motion end state
 
-`scrubProgress` publishes `--p: 0.5` once and returns without creating an observer or a rAF loop; the
-media query above then hard-resets every transform anyway and collapses the stage to `100svh`. The
-result is the composed hero image with its headline and CTA — a complete, good page section.
+Two branches, one outcome. Where the native timeline exists the `@supports` block is switched off by
+its own `@media not (prefers-reduced-motion: reduce)` and the JS never arms, so `--p` stays at its
+registered initial `0`. Where it does not, `scrubProgress` publishes `--p: 0.5` once and returns
+without creating an observer or a rAF loop. Either way the `@media (max-width: 480px), (prefers-reduced-motion: reduce)`
+block hard-resets every transform (`none !important`, plate `scale(1.04) !important`) and collapses
+the stage to `100svh`, so the value of `--p` cannot reach the screen. The result is the composed hero
+image with its headline and CTA — a complete, good page section.
 
 ### Mobile fallback
 
@@ -1051,9 +1063,14 @@ reveals only — it is not on Safari's compositor allowlist for scroll-driven an
 ```
 
 ```css
-@property --w { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
+@property --w { syntax: '<percentage>'; inherits: true; initial-value: 100%; }
 
-.wipe__fig { position: relative; margin: 0; width: min(94vw, 1100px); aspect-ratio: 8 / 5; overflow: clip; }
+/* Base layer is --w: 100% — the AFTER photo, fully revealed. Same three-tier discipline as R6:
+   with no JS, in a crawler and in print the visitor sees the finished result, not the before shot
+   masquerading as the finished result. `js-wipe` is added by the JS below only once it has
+   confirmed it can also drive the wipe. */
+.wipe__fig { --w: 100%; position: relative; margin: 0; width: min(94vw, 1100px); aspect-ratio: 8 / 5; overflow: clip; }
+.wipe.js-wipe .wipe__fig { --w: 0%; }
 .wipe__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
 /* --w = 0%  -> the BEFORE image fully covers the AFTER
@@ -1065,14 +1082,19 @@ reveals only — it is not on Safari's compositor allowlist for scroll-driven an
 /* counter-translate so the before image appears to hold perfectly still while being uncovered */
 .wipe__mask .wipe__img--before { transform: translate3d(var(--w), 0, 0); }
 
-.wipe__seam {
+/* Seam and handle belong to the interactive state only: with no JS there is nothing to drag and
+   nothing for the seam to mark, so they would be a stray white rule over a finished photo. */
+.wipe__seam, .wipe__ctl { display: none; }
+
+.wipe.js-wipe .wipe__seam {
+  display: block;
   position: absolute; top: 0; bottom: 0; left: 0; width: 2px;
   background: #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / .25);
-  transform: translate3d(calc(var(--w) * 0 + var(--seam, 0px)), 0, 0);
+  transform: translate3d(var(--seam, 0px), 0, 0);
 }
 
 /* the range input IS the handle */
-.wipe__ctl { position: absolute; inset: 0; display: grid; align-items: center; }
+.wipe.js-wipe .wipe__ctl { position: absolute; inset: 0; display: grid; align-items: center; }
 .wipe__range { width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
 .wipe__range:focus-visible { opacity: 1; outline: 3px solid #fff; outline-offset: -6px; }
 
@@ -1080,12 +1102,21 @@ reveals only — it is not on Safari's compositor allowlist for scroll-driven an
              padding: .75rem 1rem; color: #fff; text-shadow: 0 1px 6px rgb(0 0 0 / .8); }
 .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0 }
 
-@supports (animation-timeline: view()) {
-  @media not (prefers-reduced-motion: reduce) {
-    .wipe__fig { animation: wipe-w linear both; animation-timeline: view(); animation-range: contain 5% contain 90%; }
-    @keyframes wipe-w { from { --w: 0% } to { --w: 100% } }
-  }
-}
+/* Deliberately NO @supports (animation-timeline: view()) block here, for the same reason as R9
+   and for one harder one that is specific to this recipe.
+
+   MEASURED, Chromium 141: a running CSS animation sits in the *animation origin* of the cascade,
+   which outranks author inline style. With `.wipe__fig { animation: wipe-w …; animation-timeline:
+   view(); }` filling both ways, `fig.style.setProperty('--w', '65%')` — exactly what apply()
+   below does — computes back as `--w: 0%` and the mask does not move. Only `setProperty(…,
+   'important')` gets through. So the native timeline does not *complement* the JS here, it
+   silently disables it: the range input still slides, `aria-valuetext` still updates and still
+   announces a value the picture never shows. That is a worse defect than having no scroll
+   coupling at all, and it is invisible in Firefox, where you would be testing.
+
+   R3 needs JS regardless — for the drag handle, the seam position and the aria value — so the
+   native timeline buys nothing and costs the interaction. progress.js is IntersectionObserver +
+   rAF and is the load-bearing path in every engine. */
 
 @media (max-width: 768px) { .wipe { --stage-h: 180vh; } }
 
@@ -1121,6 +1152,11 @@ document.querySelectorAll('.wipe').forEach(wipe => {
 
   if (REDUCED.matches) { apply(100); return; }   // both images visible via CSS; nothing to drive
 
+  wipe.classList.add('js-wipe');            // only NOW may --w start at 0% — we drive it from here
+  // `ease` is a ROW parameter, not a default. industry-playbooks.md §2 (frizerski salon / SET-D)
+  // specifies ease 0 for this recipe: 1:1 coupling reads as the visitor's own hand on the divider
+  // and any lag reads as broken. 0.14 suits a slow architectural before/after, not a haircut.
+  // Copy the number from your row before you ship this block.
   scrubProgress(wipe, { ease: 0.14, onProgress: p => { if (!manual) apply(p * 100); } });
 
   range.addEventListener('pointerdown', () => { manual = true; });
@@ -1653,7 +1689,14 @@ console.log('normalised', n, 'elements');
   --start: calc(var(--i) * var(--step));
   --local: clamp(0, calc((var(--p) - var(--start)) / calc(1 - var(--spread))), 1);
   stroke-dasharray: 1;
-  stroke-dashoffset: calc(1.0001 - var(--local));       /* 1.0001 avoids a round-cap dot at rest */
+  /* Exactly 1, not 1.0001. An earlier draft used 1.0001 "to avoid a round-cap dot at rest";
+     it does the opposite. Measured on the shipped blueprint-elevation.svg (stroke-linecap:
+     round, white ground, non-white pixels counted) — dashoffset 1: 0 / 0 / 0 ink px at
+     480x320, 640x427, 960x640; dashoffset 1.0001: 128 / 267 / 489. Pushing the dash a
+     sliver past the path start leaves a round cap straddling parameter 0 on every subpath,
+     and on an 11-path elevation that is a visible scatter of dots before the draw begins.
+     clamp() already guarantees --local >= 0, so 1 can never be exceeded. */
+  stroke-dashoffset: calc(1 - var(--local));
 }
 
 /* TIER 1 — the resting/base state is FULLY DRAWN. If --p is never set (no JS, crawler, print),
@@ -2353,6 +2396,12 @@ Run this before `delivery.md`'s gate, not instead of it.
       IntersectionObserver or GSAP path that carries it in Firefox.
 - [ ] No hidden starting state (`opacity: 0`) in a base layer — only inside `@supports`, or applied by
       JS via a `js-armed`-style class after it has confirmed it can un-hide.
+- [ ] **No property is driven by a CSS animation AND by JS at the same time.** A running animation
+      sits in the animation origin of the cascade and outranks inline style, so `el.style.setProperty`
+      is silently discarded while it fills — measured in Chromium 141: an inline `--w: 65%` computes
+      back as `0%` under a `view()` animation on the same element. Pick one driver per property:
+      gate the JS on `!CSS.supports('animation-timeline: view()')` (R1), or omit the `@supports`
+      block entirely where JS is required anyway (R3, R9). This failure is invisible in Firefox.
 - [ ] Scroll-linked properties are `transform`/`opacity` only, with the two bounded exceptions
       (R6 `stroke-dashoffset`, R3 `clip-path`) and R3 defaults to the transform-mask variant.
 - [ ] Scrub is smooth **forward and backward**. Scrub 0→1→0 and confirm no blank canvas at the

@@ -4,10 +4,29 @@
    The hero canvas is assets/ScrollScrubber.jsx; nothing here touches a canvas.
 
    Zero dependencies. Zero JS required for the enhanced tier.
-   30,498 bytes on disk — most of that is the commentary you are reading.
-   Measured through a production Vite build (vite build, default esbuild CSS minifier):
-   10,216 bytes minified, 2,258 bytes gzipped. That minified figure is the one that
-   ships. Drop it in whole; unused blocks cost nothing.
+   The source is ~30 KB on disk and almost all of that is the commentary you are
+   reading — comments are stripped by any minifier, so the shipped cost is the
+   minified figure, not the source figure. Measured through a real production Vite
+   build (vite 8.1.5, default esbuild CSS minifier):
+
+       10,216 bytes minified · 2,232 bytes gzipped (zlib level 9)
+
+   Reproduce both numbers, and do not quote a source-file byte count here — writing
+   a measurement into this comment changes the file it measures, so an on-disk
+   figure is stale the moment it is committed. The minified number is immune to
+   that, which is the reason it is the one quoted:
+
+       cp scroll-reveal.css /tmp/cssbuild/ && cd /tmp/cssbuild
+       printf 'export default { build: { outDir: "out", rollupOptions: { input: "scroll-reveal.css" } } };' > vite.config.mjs
+       npx vite build --config vite.config.mjs
+       node -e "const fs=require('fs'),z=require('zlib'),g=fs.readdirSync('out/assets')[0]; \
+                const b=fs.readFileSync('out/assets/'+g); \
+                console.log(b.length,'minified', z.gzipSync(b,{level:9}).length,'gzipped')"
+
+   Gzip size depends on the compressor: zlib level 9 gives 2,232, zlib default 2,241,
+   and the `gzip` CLI 2,266 (it stores a filename + mtime in the header). Quote the
+   tool with the number or the number means nothing. Drop the file in whole; unused
+   blocks cost nothing.
 
    --------------------------------------------------------------------------
    THREE TIERS. Read this before editing anything below.

@@ -887,32 +887,96 @@ console.log("knockout bytes:", out.length);
 ```
 
 ```css
+/* `overflow: clip` is NOT decoration — it is what keeps the effect from breaking the page.
+   A scaled overlay still contributes its post-transform box to the document's scrollable
+   overflow. Measured at 1440x900 with the overlay at scale 6 and no clip: scrollWidth 5040
+   against innerWidth 1440 (a sideways-scrollable hero on every device) and scrollHeight 4230
+   where the content is 3060 — 1170px of empty scroll track under the fold. With `overflow:
+   clip`: 1440 / 3060, exactly the content. This is the `OVERFLOW` gate in
+   performance-a11y-gates.md failing for a reason no one would guess from the markup. */
 .logo-reveal { position: relative; min-height: 100svh; display: grid; place-items: center;
-               background: var(--surface); }
+               overflow: clip; background: var(--surface); }
 .logo-reveal h1 { color: var(--brand); margin: 0; font-size: clamp(2.5rem, 9vw, 7rem); }
 
 /* Start and end scale are PARAMETERS, tuned per breakpoint against the pixel
    counter below. There is no universally correct pair — see traps 2 and 3. */
 .knockout { --ko-from: 1; --ko-to: 6;   /* 6 is margin over the measured plateau of 3 — re-measure yours */
             position: absolute; inset: 0; transform-origin: 50% 50%;
-            transform: scale(var(--ko-from)); will-change: transform; }
+            will-change: transform;
+            /* TIER 1 — THE BASE LAYER IS THE **OPEN** STATE. Exactly the rule §14.4 states for the
+               stroke-draw, and it matters more here: the closed state is an opaque overlay across
+               the whole hero. Put `scale(var(--ko-from))` in this rule and the client's headline is
+               masked FOREVER in Firefox stable (no animation-timeline; ~16% of visitors), with JS
+               off, in print and for a crawler that executes no script. Open is the only safe rest. */
+            transform: scale(var(--ko-to)); }
 .knockout svg { width: 100%; height: 100%; display: block; }
 
 @media (max-width: 768px) { .knockout { --ko-from: .35; --ko-to: 4; } }
 
-@media not (prefers-reduced-motion: reduce) {
-  @supports (animation-timeline: view()) {
-    .knockout {
-      animation: open linear both;
-      animation-timeline: view();
+/* TIER 3 — load-bearing. ko.js below adds this and then drives the tween itself. */
+.knockout.ko-js { transform: scale(var(--ko-from)); }
+
+/* TIER 2 — progressive enhancement. The closed state and the animation that opens it live in ONE
+   rule block, on a class nothing else sets, so deleting or forgetting this block can only cost you
+   the motion — it can never leave a permanently masked headline. */
+@supports (animation-timeline: view()) {
+  @media not (prefers-reduced-motion: reduce) {
+    .knockout.ko-sda {
+      transform: scale(var(--ko-from));
+      animation: open linear both;       /* shorthand FIRST … */
+      animation-timeline: view();        /* … then the timeline */
       animation-range: entry 0% cover 70%;
     }
+    @keyframes open { from { transform: scale(var(--ko-from)); } to { transform: scale(var(--ko-to)); } }
   }
 }
-@keyframes open { from { transform: scale(var(--ko-from)); } to { transform: scale(var(--ko-to)); } }
 
-/* Reduced motion and Firefox: the hole is already open. The headline is simply visible. */
+/* Reduced motion: no overlay at all. The headline is simply visible. */
 @media (prefers-reduced-motion: reduce) { .knockout { display: none; } }
+```
+
+```js
+/* ko.js — the Firefox / no-scroll-timeline path. Not optional: without it, one visitor in six
+   gets a hero that never opens. Same property (`transform: scale`), same two parameters, so the
+   effect is identical — only the clock differs. ~20 lines, no dependency. */
+const NATIVE  = CSS.supports('animation-timeline: view()');
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
+
+for (const ko of document.querySelectorAll('.knockout')) {
+  if (REDUCED.matches) continue;                 // CSS already removed the overlay entirely
+  if (NATIVE) { ko.classList.add('ko-sda'); continue; }   // CSS closes AND opens, in one block
+
+  ko.classList.add('ko-js');                     // only NOW may the closed state apply
+  const section = ko.closest('.logo-reveal') || ko.parentElement;
+
+  // RE-READ THE PAIR ON RESIZE. --ko-from/--ko-to are breakpoint parameters (.35/4 below
+  // 768px, 1/6 above), so reading them once at load pins whichever pair happened to apply
+  // then: an iPad rotated 768 -> 1024, or a desktop window dragged narrow, keeps driving the
+  // wrong ramp — and the mobile pair is the one that starts BELOW 1, so the desktop pair on a
+  // phone means the mark never hides and there is no reveal at all. Read on resize, not per
+  // frame: getComputedStyle in a rAF callback forces a style recalc on every scroll tick.
+  let from = 1, to = 6;
+  const readParams = () => {
+    const cs = getComputedStyle(ko);
+    from = parseFloat(cs.getPropertyValue('--ko-from')) || 1;
+    to   = parseFloat(cs.getPropertyValue('--ko-to'))   || 6;
+  };
+
+  let raf = 0;
+  const draw = () => {
+    raf = 0;
+    const r = section.getBoundingClientRect();
+    // Mirrors `animation-range: entry 0% cover 70%`: 0 as the section's top edge enters the
+    // viewport, 1 at 70% of the way through covering it.
+    const p = Math.min(1, Math.max(0, (innerHeight - r.top) / (r.height + innerHeight)) / 0.7);
+    ko.style.transform = `scale(${(from + (to - from) * p).toFixed(3)})`;
+  };
+  const kick = () => { if (!raf) raf = requestAnimationFrame(draw); };
+  addEventListener('scroll', kick, { passive: true });
+  addEventListener('resize', () => { readParams(); kick(); }, { passive: true });
+  readParams();
+  draw();
+}
 ```
 
 This effect is far more geometry-dependent than it looks, and all three traps below were found by rendering it in Chromium and counting pixels — not by reading the CSS. **Measure your own mark before you ship it.** The harness is six lines:
@@ -963,7 +1027,7 @@ Four rules for this effect:
 - **The `<h1>` is real text underneath, always.** The reveal is decoration over real content; screen readers and search engines see the heading regardless of the overlay, which is `aria-hidden`.
 - **Tune `--ko-from` and `--ko-to` per breakpoint against the pixel counter above, and stop at the first scale that reaches the plateau.** Scaling past it costs nothing visually and everything in rasterisation. There is no single correct end scale: the same mark needed 3 at 1440×900 and a *start* below 1 to work at all at 375×812.
 
-For a Firefox-safe non-`@supports` build, drive the same `transform: scale()` from a GSAP ScrollTrigger or an `IntersectionObserver` + Web Animations tween. The property being animated does not change.
+`ko.js` above **is** the Firefox-safe build; it is not an optional extra. If the page already loads GSAP for something else, a `ScrollTrigger` with `scrub: true` on the same `transform: scale()` is an equivalent substitute — but do not add 45 KB of library for twenty lines. The property being animated does not change either way, so nothing about the trap measurements above shifts.
 
 ### 14.6 What fills the rest of a SET-G page
 
@@ -992,12 +1056,15 @@ Do **not** silently fill a SET-G page with Pexels stock. It breaks the skill's c
 - [ ] The stroke-draw uses `pathLength="1"` (no `getTotalLength()` in the shipped JS)
 - [ ] `animation-timeline` is declared **after** the `animation` shorthand everywhere
 - [ ] An `IntersectionObserver` fallback exists for every `@supports`-gated effect
-- [ ] **The base layer is the fully drawn state.** Delete every `@supports` block and reload: the logo must still be visible. If it vanishes, the shipped site is blank in Firefox.
+- [ ] **The base layer is the finished state, for the draw AND for the knockout.** Delete every `@supports` block *and* disable JS, then reload: the logo must still be drawn and the headline must still be legible. If either vanishes, the shipped site is blank in Firefox stable, which has not shipped `animation-timeline`.
+- [ ] `ko.js` is actually loaded on the page (not just present in the repo) — it is the load-bearing path for the knockout, not a nicety
+- [ ] The knockout still reveals **after a resize across 768px**, not just on a fresh load at each width. `--ko-from`/`--ko-to` are breakpoint parameters; read once at load they pin the wrong pair, and the desktop pair on a phone (start `scale(1)`, nothing hidden) means no reveal at all. Measured with the params read once: still `scale(2.429)` after 1440 → 375; re-read on resize: `scale(1.393)`, matching a fresh load at 375
 - [ ] The knockout `--surface` matches the section background exactly
 - [ ] The knockout `<svg>` uses `preserveAspectRatio="xMidYMid meet"` — **`slice` flatlines the reveal at desktop widths** (measured 2% movement at 1440×900)
 - [ ] **The transform origin lands on ink.** A hollow-centred mark (ring, outline, gapped wordmark) runs the reveal backwards and ends on a black hero — measured 12,187 → 30,483 → 1,825 → **0** across scale 1→12
 - [ ] The knockout reveal was screenshotted at **375×812 as well as 1440×900**, and the brand-pixel count actually **rises** across the ramp at both. At 375×812 that normally requires `--ko-from` **below 1** — at `scale(1)` the `meet` art box is already the full viewport width and nothing is hidden
 - [ ] `--ko-to` stops at the first scale that reaches the plateau, not at a round number
+- [ ] `.logo-reveal` carries `overflow: clip` — without it the scaled overlay adds itself to the document's scrollable overflow (measured `scrollWidth` 5040 vs `innerWidth` 1440 at `--ko-to: 6`) and the whole site scrolls sideways
 - [ ] The `<h1>` is real text; the knockout `<svg>` is `aria-hidden="true"`
 - [ ] Zero stock photography on the page, or exactly one with visible attribution
 - [ ] The "tipografski sajt" sentence is in the handover

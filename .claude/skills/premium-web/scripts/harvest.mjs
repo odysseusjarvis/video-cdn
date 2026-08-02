@@ -23,10 +23,17 @@
  * ── SECURITY ────────────────────────────────────────────────────────────────────
  * This script touches NO credentials. It does not read, enumerate, probe or test any
  * API key, token or ambient cloud credential from the environment, and it never will.
- * The only environment variables it reads are HTTPS_PROXY/HTTP_PROXY, and only to route
- * the browser's own requests through the proxy this container already requires. If a
- * future step needs a key, that key must be one the END USER explicitly supplied for
- * their own task — never something discovered by looking around.
+ * It reads exactly three environment variables, all of them named, documented and
+ * non-secret — no enumeration, no pattern-matching, no `Object.keys(process.env)`:
+ *   HTTPS_PROXY / https_proxy   route the browser's own requests through the proxy this
+ *                               container already requires (loopback is never proxied)
+ *   PREMIUM_WEB_TOOLS           where to install sharp, so it never lands in the client's
+ *                               package.json
+ *   TMPDIR                      where the curl HTTP/1.1 fallback writes its temp file
+ * Reading a named path or proxy variable is not credential access; enumerating the
+ * environment is. If a future step needs a key, that key must be one the END USER
+ * explicitly supplied for their own task, validated at the point of use — never
+ * something discovered by looking around.
  *
  * ── DO NOT SCRAPE SOCIAL PLATFORMS ──────────────────────────────────────────────
  * Instagram and Facebook profile/page URLs are refused by design. Their CDN URLs
@@ -78,6 +85,8 @@ const VIDEO_EXT = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i;
 const NON_ASSET_EXT = /\.(css|js|mjs|json|xml|txt|woff2?|ttf|otf|eot|pdf|zip|map)(\?|#|$)/i;
 
 const LOGO_HINT = /(logo|lockup|brandmark|wordmark|favicon|apple-touch|touch-icon|mask-icon|isotype|amblem)/i;
+// Provenance strings (the `from` array) that mean "this is the brand mark, not content".
+const LOGO_SOURCE = /(link:icon|json-ld:logo|tile-image)/i;
 const SCREENSHOT_HINT = /(screenshot|screen-shot|screen_shot|snimak-ekrana|placeholder|dummy|lorem)/i;
 const SPRITE_HINT = /(sprite|icons?[-_.]|glyph|bullet|arrow|chevron|spinner|loader|pixel|tracking|beacon|1x1|blank)/i;
 const BEFORE_HINT = /(^|[-_.\s/])(before|prije|pre|prie|raniije|ranije)([-_.\s/]|$)/i;
@@ -105,7 +114,10 @@ Options
   --browser              force the Playwright/Chromium rendered harvest for every page
   --no-browser           never launch Chromium (plain fetch only)
   --max <n>              max assets to download      (default: 80)
-  --min-bytes <n>        reject anything smaller     (default: 3000)
+  --min-bytes <n>        reject anything smaller     (default: 3000; vectors and the
+                         page's own brand marks — <link rel=icon|apple-touch-icon|
+                         mask-icon>, schema.org logo — are EXEMPT, because a real SVG
+                         wordmark is ~300 B and dropping it kills SET-G)
   --max-video-bytes <n>  skip videos larger than     (default: 26214400 = 25 MiB,
                          which is Cloudflare Pages' per-file cap)
   --concurrency <n>      parallel downloads          (default: 4)
@@ -239,10 +251,30 @@ function abs(url, base) {
 /**
  * Image-resizing proxies wrap the real asset in a query parameter:
  *   /_next/image?url=https%3A%2F%2Fcdn.sanity.io%2F…-2560x1440.jpg&w=3840&q=75
+ *   /_next/image?url=%2Fimg%2Finterijer.jpg&w=3840&q=75          <-- SAME-ORIGIN form
  *   https://images.weserv.nl/?url=…
  * Going to the INNER url is strictly better — it is the untouched original at full
  * resolution, not the proxy's re-encode capped at whatever `w` the page asked for.
  * Returns the inner absolute URL, or null.
+ *
+ * The inner value is NOT always absolute. Next.js — by far the most common wrapper
+ * you will meet — percent-encodes a ROOT-RELATIVE path for every image served out of
+ * the site's own `public/`, which is the majority of a small business's photography.
+ * An earlier version tested `/^https?:\/\//` and bailed on those, so the harvest kept
+ * the proxy URL. Both halves of that were measured against a local fixture whose
+ * `/_next/image` handler re-encodes (2400x1600 q88 original -> 1200-wide q60), harvesting
+ * the same page with only this function reverted:
+ *
+ *   before   8181327f-image.jpg          1200x800    5,892 B   <- the resizer's re-encode,
+ *                                                                 named after `/_next/image`
+ *   after    cf961e5b-interijer.jpg      2400x1600  22,768 B   <- the original file
+ *
+ * So it is not only a cosmetic naming problem: sequence and before/after detection key on
+ * the filename tokens that `image.jpg` throws away, AND the pixels kept are the proxy's
+ * downscale. Resolving the relative form against the outer URL fixes both.
+ *
+ * Relative values are only accepted when they actually look like an asset path, so a
+ * tracking parameter such as `?u=/thank-you` can never be mistaken for the payload.
  */
 function unwrapImageProxy(url) {
   try {
@@ -250,8 +282,10 @@ function unwrapImageProxy(url) {
     for (const key of ['url', 'src', 'image', 'uri', 'u']) {
       const v = u.searchParams.get(key);
       if (!v) continue;
-      if (!/^https?:\/\//i.test(v)) continue;
-      const inner = new URL(v);
+      let inner;
+      if (/^https?:\/\//i.test(v)) inner = new URL(v);
+      else if (/^\/[^/]/.test(v) && (IMAGE_EXT.test(v) || VIDEO_EXT.test(v))) inner = new URL(v, u);
+      else continue;
       if (inner.href === u.href) continue;
       return inner.href;
     }
@@ -616,15 +650,26 @@ function cssUrls(css) {
   return out;
 }
 
+/**
+ * Sink entries are `{ url, key }`, not bare strings. The KEY is load-bearing: a
+ * schema.org `logo` is the asset SET-G is built on, and once it has been flattened
+ * into an anonymous list of image URLs nothing downstream can tell it apart from a
+ * gallery photo. Keeping the key lets the caller label it `json-ld:logo`, which the
+ * size floor then exempts.
+ */
 function walkJsonLdImages(node, sink, depth = 0) {
   if (!node || depth > 8) return;
   if (Array.isArray(node)) { for (const n of node) walkJsonLdImages(n, sink, depth + 1); return; }
   if (typeof node !== 'object') return;
   for (const [k, v] of Object.entries(node)) {
     if (/^(image|logo|photo|thumbnailurl|contenturl|primaryimageofpage|screenshot)$/i.test(k)) {
+      const key = k.toLowerCase();
       const push = (x) => {
-        if (typeof x === 'string') sink.push(x);
-        else if (x && typeof x === 'object') { if (typeof x.url === 'string') sink.push(x.url); if (typeof x.contentUrl === 'string') sink.push(x.contentUrl); }
+        if (typeof x === 'string') sink.push({ url: x, key });
+        else if (x && typeof x === 'object') {
+          if (typeof x.url === 'string') sink.push({ url: x.url, key });
+          if (typeof x.contentUrl === 'string') sink.push({ url: x.contentUrl, key });
+        }
       };
       if (Array.isArray(v)) v.forEach(push); else push(v);
     }
@@ -779,7 +824,7 @@ function extractFromHtml(html, pageUrl) {
   }
   const jsonImages = [];
   blocks.forEach((b) => walkJsonLdImages(b, jsonImages));
-  jsonImages.forEach((u) => add(u, 'json-ld:image'));
+  jsonImages.forEach(({ url, key }) => add(url, key === 'logo' ? 'json-ld:logo' : 'json-ld:image'));
 
   const titleM = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
 
@@ -1294,6 +1339,9 @@ async function main() {
     log('');
     log(`${C.cyn}page${C.off} ${pageUrl}`);
     let harvested = null, via = null;
+    // Keep WHY a page produced nothing. Printing it once as it happens is not enough:
+    // the closing banner is what the next agent acts on, and it scrolls past by then.
+    let pageFailReason = null;
 
     if (!wantBrowser) {
       const r = await fetchPageHtml(pageUrl, opt.timeout);
@@ -1317,6 +1365,7 @@ async function main() {
           if (n) log(`  ${C.dim}css ${sheet.split('/').pop()} → +${n}${C.off}`);
         }
       } else {
+        pageFailReason = `plain fetch: ${r.reason}`;
         warn(`  plain fetch failed: ${r.reason}`);
       }
     }
@@ -1342,13 +1391,14 @@ async function main() {
           }
           via = via ? `${via}+chromium` : 'chromium';
         } else {
+          pageFailReason = `rendered harvest: ${b.reason}`;
           warn(`  rendered harvest failed: ${b.reason}`);
         }
       }
     }
 
     if (!harvested) {
-      pageReports.push({ url: pageUrl, ok: false, candidates: 0, via: null });
+      pageReports.push({ url: pageUrl, ok: false, candidates: 0, via: null, reason: pageFailReason || 'unknown' });
       err(`  no content from ${pageUrl}`);
       continue;
     }
@@ -1453,7 +1503,33 @@ async function main() {
       return;
     }
 
-    if (!opt.keepSmall && buf.length < opt.minBytes && a.kind !== 'video') {
+    // SIZE FLOOR — with a logo exemption.
+    //
+    // --min-bytes exists to drop tracking pixels, spacer GIFs and sprite fragments.
+    // Applied flat it also deletes the one asset that keeps SET-G reachable, because a
+    // brand mark is SMALL BY DESIGN: the SVG wordmark in the local fixture is 270 B and
+    // its apple-touch-icon 1,038 B — both an order of magnitude under the 3,000 B
+    // default. Measured before this exemption existed, against a logo-only page:
+    //
+    //     requested 2 / downloaded 0 / failed 0 (+2 skipped: too small or over the size cap)
+    //     ZERO ASSETS DOWNLOADED — SET CLASS AUTO-DOWNGRADED TO SET-F
+    //
+    // — while the banner simultaneously advised "or SET-G if a logo exists". The logo
+    // did exist, was found, was fetched successfully, and was then thrown away by this
+    // very line. The soft-404 check twenty lines above already exempts SVG for exactly
+    // this reason ("the single asset that keeps SET-G reachable"); the floor has to
+    // agree with it or the exemption upstream buys nothing.
+    //
+    // A logo-grade asset is one that is a vector, or that the page itself nominated as
+    // its brand mark (<link rel=icon|apple-touch-icon|mask-icon>, schema.org `logo`,
+    // msapplication-TileImage), or whose filename says so. classifyAsset() already
+    // routes all of these to role 'logo' and REJECT_LONG_EDGE already spares a small
+    // logo there — so keeping them here costs nothing and loses nothing to noise.
+    const logoGrade =
+      isSvg ||
+      LOGO_SOURCE.test((a.from || []).join(' ')) ||
+      LOGO_HINT.test(a.url);
+    if (!opt.keepSmall && buf.length < opt.minBytes && a.kind !== 'video' && !logoGrade) {
       skipped.push({ ...a, reason: `below --min-bytes (${buf.length} < ${opt.minBytes})` });
       return;
     }
@@ -1611,6 +1687,35 @@ async function main() {
     if (failures.length) {
       console.log(`   ${++n}. Open ${failedPath} and run the ${failures.length} curl block(s) — they usually work from a`);
       console.log('      normal machine even when they fail from here.');
+    } else if (skipped.length) {
+      // Do not say "nothing was found" when things were found, fetched and then
+      // filtered. That sends the next agent to re-check the URLs — the one place the
+      // problem is definitely not.
+      const tooSmall = skipped.filter((s) => /min-bytes/.test(s.reason)).length;
+      const tooBig = skipped.length - tooSmall;
+      console.log(`   ${++n}. Nothing FAILED — ${skipped.length} asset(s) downloaded fine and were then FILTERED OUT`);
+      console.log(`      by this script's own thresholds${tooSmall ? `: ${tooSmall} under --min-bytes (${opt.minBytes} B)` : ''}${tooBig ? `${tooSmall ? ',' : ':'} ${tooBig} over a size cap` : ''}.`);
+      console.log('      The URLs are right and the network is fine. Look at the skipped list in');
+      console.log('      manifest.json first, then re-run with --keep-small (or a lower --min-bytes)');
+      console.log('      if those assets are real. Do NOT re-check the page URLs.');
+      for (const s of skipped.slice(0, 6)) console.log(`        · ${s.url.slice(0, 88)} — ${s.reason}`);
+    } else if (pageReports.length && pageReports.every((p) => !p.ok)) {
+      // NOT the same failure as "the page parsed and had no images", and the remedy is
+      // the opposite one. Every page was unreadable — DNS, connection refused, a timeout,
+      // a 4xx — so nothing was ever parsed and there is nothing wrong with the imagery.
+      // Saying "the pages parsed but reference no imagery" here sends the next agent to
+      // audit a page it never actually reached. The reason was printed as it happened and
+      // has scrolled off by now, so repeat it.
+      console.log(`   ${++n}. NO PAGE WAS READ AT ALL — ${pageReports.length} of ${pageReports.length} URL(s) returned nothing.`);
+      console.log('      This is a reachability failure, not an imagery failure: nothing was parsed, so');
+      console.log('      "no images found" says nothing about the client\'s site. Fix the URL or the');
+      console.log('      network first, then re-run.');
+      // Truncated: the curl fallback echoes its whole command line into the reason, which
+      // is 400 characters of flags nobody needs in a summary. Full text is in manifest.json.
+      for (const p of pageReports.slice(0, 6)) {
+        const why = String(p.reason).split(' | ')[0].slice(0, 120);
+        console.log(`        · ${p.url.slice(0, 72)} — ${why}`);
+      }
     } else {
       console.log(`   ${++n}. There is no FAILED.md: nothing failed, because no image URL was ever found.`);
       console.log('      The pages parsed but reference no imagery this script can reach — so the');

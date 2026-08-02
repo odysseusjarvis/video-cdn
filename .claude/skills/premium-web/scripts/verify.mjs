@@ -351,6 +351,50 @@ function initScript({ killSmoothScroll }) {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   };
+  /**
+   * Length of the VISIBLE prose — real text nodes, excluding screen-reader-only text.
+   *
+   * The reduced-motion gate compares this number against the normal build to assert
+   * "the reduce build did not lose content". document.body.innerText is the wrong
+   * input for that comparison, because it counts visually-hidden text equivalents,
+   * and a well-built component legitimately has DIFFERENT ones in each branch.
+   *
+   * assets/ScrollScrubber.jsx is exactly that case, and it is correct in both:
+   *   - animated branch: the <canvas> is aria-hidden, so the text equivalent is a
+   *     visually-hidden <p> (clip-path: inset(50%), 1×1px);
+   *   - static/reduced branch: there is no canvas, the still is a real <img alt="…">,
+   *     and emitting the <p> as well would double-announce it.
+   * Nothing is missing under reduce — the equivalent simply moved into an attribute.
+   *
+   * Measured on a ScrollScrubber page with ariaLabel "Proces kovanja, kadar po kadar",
+   * Chromium 141, at 1440px:
+   *   innerText / plain text nodes   normal 126 · reduce  95   -> spurious FAIL (Δ31 = the <p>)
+   *   this helper (sr-only excluded) normal  95 · reduce  95   -> correct PASS
+   * Re-measured on a static site with no scrubber: 425 · 425, unchanged — the sr-only
+   * exclusion does not move the number on ordinary pages.
+   *
+   * Genuinely invisible CONTENT is still caught, by the hiddenContent scan above —
+   * that is the check that is about visibility. This one is about content existing.
+   */
+  Q.proseLen = function () {
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        if (!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        const p = n.parentElement;
+        if (!p) return NodeFilter.FILTER_REJECT;
+        if (/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|TITLE)$/.test(p.tagName)) return NodeFilter.FILTER_REJECT;
+        const cs = getComputedStyle(p);
+        if (cs.display === 'none' || cs.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
+        // The sr-only idiom in every form that matters: a 1×1 (or 0×0) clipped box.
+        const r = p.getBoundingClientRect();
+        if (r.width <= 1 || r.height <= 1) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    let s = '';
+    while (w.nextNode()) s += ' ' + w.currentNode.nodeValue;
+    return s.replace(/\\s+/g, ' ').trim().length;
+  };
   Q.accName = function (el) {
     const al = el.getAttribute && el.getAttribute('aria-label');
     if (al && al.trim()) return al.trim();
@@ -525,6 +569,90 @@ async function markScrollPhase(page) {
   });
 }
 
+/* ── settleAnimations: why this exists instead of `animations: 'disabled'` ──────
+ * Playwright's `screenshot({ animations: 'disabled' })` is the obvious way to make
+ * a capture deterministic, and on THIS skill's output it is actively destructive.
+ * Its documented rule is: finite animations fast-forward to completion, infinite
+ * animations are CANCELLED TO THEIR INITIAL STATE. A CSS animation driven by
+ * `animation-timeline: view()` has `duration: auto` and is progress-driven, so it
+ * takes the second branch — it is rewound to its from-keyframe and screenshotted
+ * there. Every `.pw-reveal` in assets/scroll-reveal.css starts at `opacity: 0`.
+ *
+ * MEASURED — reproduce it in four lines rather than trusting this comment. Fixture:
+ * an .html that links assets/scroll-reveal.css and contains
+ *     <h1 class="pw-reveal" data-reveal>…</h1>   (72px serif, black on white)
+ * followed by enough content to scroll. Chromium 141.0.7390.37, --no-sandbox,
+ * viewport 1440x900, scroll position 0, counting pixels darker than 200/255 inside
+ * the h1's own bounding box:
+ *     screenshot({ animations: 'allow'    })  ->  14,841 ink px   (headline visible)
+ *     screenshot({ animations: 'disabled' })  ->       0 ink px   (headline gone)
+ * The exact ink figure is a property of the fixture's text and font size — the only
+ * number that carries meaning is the ZERO, and it is zero for every reveal on the page.
+ * Confirmed end-to-end through this very script: patch it back to `animations:
+ * 'disabled'`, re-run it over a built site, and shots/1440-p000.png comes back with the
+ * <h1> and the lede gone and only the non-revealed CTA left standing.
+ *
+ * So the one step in the whole skill that LOOKS at the page was handing the agent a
+ * page with the headings missing, and Stage 13 of tool-ladder.md tells that agent to
+ * judge the design from exactly these files. It would "fix" a design that was fine,
+ * or report a reveal as broken when it works.
+ *
+ * The determinism that flag was bought for is still required, so we reproduce its
+ * semantics ourselves and exempt the one case it gets wrong:
+ *   - scroll-driven (ViewTimeline / ScrollTimeline) -> LEAVE ALONE. Its state is a
+ *     pure function of scroll position, which scrollToProgress() has already settled,
+ *     so it is deterministic without being touched.
+ *   - time-driven, infinite  -> rewind to 0 and pause (what Playwright does).
+ *   - time-driven, finite    -> finish (what Playwright does).
+ * Screenshots then pass `animations: 'allow'` so Playwright does not undo this.
+ *
+ * `a.pause()` IS NOT ENOUGH ON A CSSAnimation, and this was the bug that made the first
+ * version of this function only half-work. Measured, Chromium 141, a `spin 1s linear
+ * infinite` div:
+ *     a.currentTime = 0; a.pause();   -> playState "paused", currentTime 0
+ *     …300 ms later                    -> playState "paused", currentTime 16.712,
+ *                                         transform matrix(0.9945, 0.1048, …)
+ * The Web Animations pause is reported but the CSS-driven playback ticks on anyway, so
+ * the rewind survives less than one frame and the screenshot lands at an arbitrary phase
+ * — exactly the non-determinism `animations: 'disabled'` was bought for. Pinning
+ * `animation-play-state: paused` in the element's inline style does hold (currentTime
+ * still 0, transform still identity after 400 ms), so we do both.
+ *
+ * The pin is skipped for any element that also carries a scroll-driven animation:
+ * `animation-play-state` is per-element, not per-animation, and freezing a `view()`
+ * reveal would stop it updating at the NEXT scroll stop. Leaving the pin in place for
+ * the rest of the page's life is deliberate — every later capture is then deterministic
+ * too, and a paused decorative spinner cannot move layout or change what LCP resolves to. */
+async function settleAnimations(page) {
+  await page.evaluate(() => {
+    const scrollDriven = new Set();
+    const all = document.getAnimations();
+    for (const a of all) {
+      const tl = a.timeline && a.timeline.constructor ? a.timeline.constructor.name : '';
+      if (tl !== 'ViewTimeline' && tl !== 'ScrollTimeline') continue;
+      const el = a.effect && a.effect.target;
+      if (el) scrollDriven.add(el);
+    }
+    for (const a of all) {
+      const tl = a.timeline && a.timeline.constructor ? a.timeline.constructor.name : '';
+      if (tl === 'ViewTimeline' || tl === 'ScrollTimeline') continue;
+      let t = null;
+      try { t = a.effect && a.effect.getTiming ? a.effect.getTiming() : null; } catch (_) {}
+      const infinite = t && (t.iterations === Infinity || t.duration === Infinity);
+      try {
+        if (infinite) {
+          a.currentTime = 0;
+          a.pause();
+          const el = a.effect && a.effect.target;
+          if (el && el.style && !scrollDriven.has(el)) el.style.animationPlayState = 'paused';
+        } else {
+          a.finish();
+        }
+      } catch (_) { try { a.pause(); } catch (_) {} }
+    }
+  }).catch(() => {});
+}
+
 async function readTelemetry(page) {
   return page.evaluate(() => {
     const Q = window.__pwq || {};
@@ -622,8 +750,9 @@ async function checkVisualAndScrollCLS(browser, url, shotDir) {
 
     for (const p of PROGRESSES) {
       await scrollToProgress(page, p);
+      await settleAnimations(page);
       const file = path.join(shotDir, `${vp.label}-p${String(Math.round(p * 100)).padStart(3, '0')}.png`);
-      await page.screenshot({ path: file, animations: 'disabled' });
+      await page.screenshot({ path: file, animations: 'allow' });
       shots.push(path.relative(ARGS.out, file));
     }
     // A dense sweep gives layout shift a chance to happen between the four stops.
@@ -643,7 +772,8 @@ async function checkVisualAndScrollCLS(browser, url, shotDir) {
 
     // Full-page reference shot: cheap, and the fastest way to see "does this look generic".
     const fullFile = path.join(shotDir, `${vp.label}-fullpage.png`);
-    await page.screenshot({ path: fullFile, fullPage: true, animations: 'disabled' }).catch(() => {});
+    await settleAnimations(page);
+    await page.screenshot({ path: fullFile, fullPage: true, animations: 'allow' }).catch(() => {});
     if (fs.existsSync(fullFile)) shots.push(path.relative(ARGS.out, fullFile));
 
     baseline[vp.label] = await page.evaluate(() => {
@@ -651,7 +781,9 @@ async function checkVisualAndScrollCLS(browser, url, shotDir) {
       return {
         scrollHeight: de.scrollHeight,
         innerHeight: window.innerHeight,
-        textLen: (document.body.innerText || '').replace(/\s+/g, ' ').trim().length,
+        // Must be the SAME measurement the reduce pass uses, or the comparison is
+        // between two different definitions of "content". See Q.proseLen.
+        textLen: window.__pwq.proseLen(),
         interactive: document.querySelectorAll('a[href],button,input,select,textarea,[role="button"]').length,
       };
     });
@@ -819,15 +951,23 @@ async function checkReducedMotion(browser, url, shotDir, baseline) {
     await scrollSweep(page, { pause: 120 });
     await scrollToProgress(page, 0);
 
+    // Same reasoning as the normal-motion pass, and it matters MORE here: this check
+    // asserts "a complete, informative end state". Rewinding every scroll-driven
+    // animation to its hidden from-keyframe would manufacture the exact empty page
+    // the check exists to catch, and the failure would be the screenshotter's, not
+    // the site's — a false NO-SHIP that no amount of editing the site could clear.
     const f0 = path.join(shotDir, `reduced-${vp.label}-p000.png`);
-    await page.screenshot({ path: f0, animations: 'disabled' });
+    await settleAnimations(page);
+    await page.screenshot({ path: f0, animations: 'allow' });
     shots.push(path.relative(ARGS.out, f0));
     await scrollToProgress(page, 0.5);
     const f5 = path.join(shotDir, `reduced-${vp.label}-p050.png`);
-    await page.screenshot({ path: f5, animations: 'disabled' });
+    await settleAnimations(page);
+    await page.screenshot({ path: f5, animations: 'allow' });
     shots.push(path.relative(ARGS.out, f5));
     const ffull = path.join(shotDir, `reduced-${vp.label}-fullpage.png`);
-    await page.screenshot({ path: ffull, fullPage: true, animations: 'disabled' }).catch(() => {});
+    await settleAnimations(page);
+    await page.screenshot({ path: ffull, fullPage: true, animations: 'allow' }).catch(() => {});
     if (fs.existsSync(ffull)) shots.push(path.relative(ARGS.out, ffull));
 
     const r = await page.evaluate(() => {
@@ -911,7 +1051,7 @@ async function checkReducedMotion(browser, url, shotDir, baseline) {
       return {
         scrollHeight: de.scrollHeight,
         innerHeight: vh,
-        textLen: (document.body.innerText || '').replace(/\s+/g, ' ').trim().length,
+        textLen: Q.proseLen(),
         interactive: document.querySelectorAll('a[href],button,input,select,textarea,[role="button"]').length,
         hiddenContent: [...new Set(hiddenContent)].slice(0, 10),
         stillAnimating: [...new Set(stillAnimating)].slice(0, 10),
@@ -1748,10 +1888,22 @@ async function checkLanguages(browser, origin, dir) {
 
   await ctx.close();
 
+  // COUNT THE LANGUAGES, do not assume where the base one lives.
+  // `declaredMap.size + 1` assumed the base language is never in the map. It usually IS:
+  // a correct hreflang block is self-referential (i18n-seo.md §3 requires the same block,
+  // byte-identical, in all three documents, so `bs` is listed in the `bs` page too), and
+  // `--langs bs,en,de` names it explicitly. Only a switcher that links just the OTHER
+  // languages leaves it out. So the old expression reported "4 declared languages" for a
+  // bs/en/de site — reproduced with `--langs bs,en,de` against a single-language build,
+  // which is exactly the run where an agent is reading the number to decide what is missing.
+  const languageCount = new Set(
+    [...declaredMap.keys(), (decl.htmlLang || '').toLowerCase()].filter(Boolean)
+  ).size;
+
   if (failures.length) {
-    fail('I18N-COMPLETE', `${declaredMap.size + 1} declared languages, ${failures.length} completeness defects`, failures);
+    fail('I18N-COMPLETE', `${languageCount} declared languages, ${failures.length} completeness defects`, failures);
   } else {
-    pass('I18N-COMPLETE', `all ${variants.length} declared languages are complete`, infos);
+    pass('I18N-COMPLETE', `all ${languageCount} declared languages are complete`, infos);
   }
 }
 

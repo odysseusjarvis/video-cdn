@@ -2,7 +2,7 @@
 /**
  * premium-web / scripts/frames.mjs
  * ---------------------------------------------------------------------------
- * Step 7 of the skill, in one command: a source the CLIENT actually owns
+ * Step 9 of the skill (SKILL.md §2, "Motion assets"), in one command: a source the CLIENT owns
  * (a video, a directory of stills, or a before/after pair) in, a budget-checked
  * two-width frame ladder out, plus a poster, a social card and a manifest that
  * the scrubber component and the verify step both read.

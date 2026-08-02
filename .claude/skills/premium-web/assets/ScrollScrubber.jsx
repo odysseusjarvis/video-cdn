@@ -554,6 +554,11 @@ function paintParallax(ctx, store, p, dw, dh, fit, rates, amplitude) {
  * @property {number}    [posterWidth=1280]
  * @property {number}    [posterHeight=720]
  * @property {React.ReactNode} [children]    Overlay. Read --pw-progress off the pin element.
+ *   CAUTION: the static branch (reduced motion / save-data / no frames) pins
+ *   --pw-progress to 1, so an overlay that FADES OUT across the scrub resolves to
+ *   opacity 0 and its text disappears entirely for those visitors. Restore it with
+ *   `[data-pw-scrubber='static'] .your-overlay { opacity: 1; transform: none; }`.
+ *   See references/scrubber-component.md §4, "The fade-OUT trap".
  * @property {React.CSSProperties} [style]
  */
 

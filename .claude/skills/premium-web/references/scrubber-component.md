@@ -390,8 +390,38 @@ Use `onProgress` only when JS genuinely needs the number (switching a caption, f
 analytics beacon). Calling `setState` at 60 Hz re-renders the whole subtree every frame and
 will undo the work D3 just did.
 
-Under reduced motion the pin is rendered with `--pw-progress: 1`, so every one of those
-expressions lands on its end state automatically.
+### The fade-OUT trap — read this before shipping any overlay
+
+Under reduced motion the pin renders with `--pw-progress: 1`, so every expression above
+lands on its **end state**. For an overlay that fades *in* (`.hero-hotspots`) that is
+exactly right: it ends visible. For an overlay that fades *out* — like `.hero-headline`
+above — the end state is `opacity: 0`, and a reduced-motion visitor therefore gets **no
+headline at all**. Not a still version of the animation: the text is simply gone.
+
+This is not theoretical. Rendering the component with a fade-out caption and running
+`verify.mjs` reports it as a hard failure at both widths:
+
+```
+FAIL  REDUCED-MOTION         prefers-reduced-motion does not present a complete end state
+- 375px: CONTENT INVISIBLE under reduce — p "Od sirovog čelika do gotovog komada"
+- 375px: reduce build shows 95 chars vs 126 normally — content is missing, not merely still
+```
+
+The static branch tags the section, so restoring the resting state is one rule. Key off the
+attribute rather than the media query and save-data / no-frames tiers are covered too — they
+pin `--pw-progress: 1` for the same reason and have the same problem:
+
+```css
+/* Anything that fades OUT across the scrub must be put back when there is no scrub. */
+[data-pw-scrubber='static'] .hero-headline {
+  opacity: 1;
+  transform: none;
+}
+```
+
+The rule of thumb: **an overlay may end hidden only if it also starts hidden.** If it
+carries text the visitor would otherwise never read, it must be legible at
+`--pw-progress: 1`.
 
 ---
 
