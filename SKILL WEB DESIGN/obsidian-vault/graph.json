@@ -1,0 +1,858 @@
+{
+ "naslov": "SKILL WEB DESIGN",
+ "cvorova": 51,
+ "veza": 110,
+ "dokumenata": 3,
+ "cvorovi": [
+  {
+   "id": "GRESKA-01",
+   "naslov": "Lažan kontakt kao činjenica",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 1,
+   "izlaznih": 4
+  },
+  {
+   "id": "GRESKA-02",
+   "naslov": "Cover-fit pojeo 74% kadra na telefonu",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 1,
+   "izlaznih": 4
+  },
+  {
+   "id": "GRESKA-03",
+   "naslov": "Hero od ~256 MB dekodiranih slika ruši telefone",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 1,
+   "izlaznih": 4
+  },
+  {
+   "id": "GRESKA-04",
+   "naslov": "Tri zamrzavanja u animaciji",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 1,
+   "izlaznih": 2
+  },
+  {
+   "id": "GRESKA-05",
+   "naslov": "Osam beskonačnih `box-shadow` animacija",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  },
+  {
+   "id": "GRESKA-06",
+   "naslov": "Isti auto dva puta, dvije animacije",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 1,
+   "izlaznih": 2
+  },
+  {
+   "id": "GRESKA-07",
+   "naslov": "Bijelo dugme na bijeloj podlozi",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  },
+  {
+   "id": "GRESKA-08",
+   "naslov": "Tajna iz chata dospjela u destilat",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  },
+  {
+   "id": "GRESKA-09",
+   "naslov": "Nevidljiva dugmad hvataju dodire",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  },
+  {
+   "id": "GRESKA-10",
+   "naslov": "Kontakt forma tiho bacala svaku poruku",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  },
+  {
+   "id": "GRESKA-11",
+   "naslov": "Dijeljeni linkovi vraćaju 404",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  },
+  {
+   "id": "GRESKA-12",
+   "naslov": "Cijeli lucide set u bundleu",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 2,
+   "izlaznih": 2
+  },
+  {
+   "id": "GRESKA-13",
+   "naslov": "`scroll-behavior: smooth` + `scrollTo(0,0)` pri promjeni rute",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  },
+  {
+   "id": "GRESKA-14",
+   "naslov": "Promjena veličine trajno obriše hero",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 0,
+   "izlaznih": 4
+  },
+  {
+   "id": "GRESKA-15",
+   "naslov": "Reducirani pokret: dva teksta jedan preko drugog",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  },
+  {
+   "id": "GRESKA-16",
+   "naslov": "Fiksni nav preko trake ispod njega",
+   "vrsta": "greska",
+   "izvor": "GRESKE.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  },
+  {
+   "id": "MJERA-01",
+   "naslov": "Instagram iz kontejnera: nedostupan, pet ruta",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 2,
+   "izlaznih": 4
+  },
+  {
+   "id": "MJERA-02",
+   "naslov": "Chromium u ovom kontejneru nema izlaz na mrežu",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 1,
+   "izlaznih": 4
+  },
+  {
+   "id": "MJERA-03",
+   "naslov": "Chromium binarka nije ona koju Playwright očekuje",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 1,
+   "izlaznih": 2
+  },
+  {
+   "id": "MJERA-04",
+   "naslov": "Gemini ključ iz okruženja: 401",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 1,
+   "izlaznih": 2
+  },
+  {
+   "id": "MJERA-05",
+   "naslov": "Javnih izvora o E-Drive Gradačac: nula",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 1,
+   "izlaznih": 2
+  },
+  {
+   "id": "MJERA-06",
+   "naslov": "61,5 MB transkripta = 219 KB kičme (**0,36%**)",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 4,
+   "izlaznih": 0
+  },
+  {
+   "id": "MJERA-07",
+   "naslov": "Raspodjela poziva alata",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 1,
+   "izlaznih": 2
+  },
+  {
+   "id": "MJERA-08",
+   "naslov": "Materijal animacije",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 0,
+   "izlaznih": 4
+  },
+  {
+   "id": "MJERA-09",
+   "naslov": "Memorija heroa prije ispravke",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 1,
+   "izlaznih": 2
+  },
+  {
+   "id": "MJERA-10",
+   "naslov": "Težina bundlea",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 1,
+   "izlaznih": 4
+  },
+  {
+   "id": "MJERA-11",
+   "naslov": "Isporučena brend stranica",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 0,
+   "izlaznih": 4
+  },
+  {
+   "id": "MJERA-12",
+   "naslov": "Revizija `src/` prije ispravki",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 0,
+   "izlaznih": 4
+  },
+  {
+   "id": "MJERA-14",
+   "naslov": "Statička mapa ikona: izmjereni dobitak",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 0,
+   "izlaznih": 6
+  },
+  {
+   "id": "MJERA-13",
+   "naslov": "PR #1",
+   "vrsta": "mjera",
+   "izvor": "MJERENJA.md",
+   "ulaznih": 1,
+   "izlaznih": 2
+  },
+  {
+   "id": "OTV-01",
+   "naslov": "E-Drive nema nijedan podatak osim imena",
+   "vrsta": "otvoreno",
+   "izvor": "OTVORENO.md",
+   "ulaznih": 2,
+   "izlaznih": 6
+  },
+  {
+   "id": "OTV-02",
+   "naslov": "Neprovjereni podaci koji trenutno stoje na stranici",
+   "vrsta": "otvoreno",
+   "izvor": "OTVORENO.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  },
+  {
+   "id": "OTV-03",
+   "naslov": "Gemini kao dugi kontekst nije dostupan",
+   "vrsta": "otvoreno",
+   "izvor": "OTVORENO.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  },
+  {
+   "id": "OTV-04",
+   "naslov": "Repozitorij nema nijedan CI workflow",
+   "vrsta": "otvoreno",
+   "izvor": "OTVORENO.md",
+   "ulaznih": 1,
+   "izlaznih": 2
+  },
+  {
+   "id": "OTV-05",
+   "naslov": "Isporuka na Desktop se ne može uraditi direktno",
+   "vrsta": "otvoreno",
+   "izvor": "OTVORENO.md",
+   "ulaznih": 1,
+   "izlaznih": 2
+  },
+  {
+   "id": "OTV-06",
+   "naslov": "Kontakt stranica nije objavljena kao zaseban link",
+   "vrsta": "otvoreno",
+   "izvor": "OTVORENO.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  },
+  {
+   "id": "PRAVILO-01",
+   "naslov": "Provjera nije gotova dok neko nije pogledao sliku",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 9,
+   "izlaznih": 0
+  },
+  {
+   "id": "PRAVILO-02",
+   "naslov": "Placeholder nikad ne smije izgledati kao podatak",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 4,
+   "izlaznih": 0
+  },
+  {
+   "id": "PRAVILO-03",
+   "naslov": "Ruta se mjeri prije nego uđe u plan",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 3,
+   "izlaznih": 6
+  },
+  {
+   "id": "PRAVILO-04",
+   "naslov": "Redakcija tajni je u alatu, i ide prva",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 1,
+   "izlaznih": 0
+  },
+  {
+   "id": "PRAVILO-05",
+   "naslov": "Unaprijediti znači zamijeniti, ne dodati pored",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 1,
+   "izlaznih": 0
+  },
+  {
+   "id": "PRAVILO-06",
+   "naslov": "Kad kontekst ne stane, izbaci izlaz alata a ne značenje",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 0,
+   "izlaznih": 4
+  },
+  {
+   "id": "PRAVILO-07",
+   "naslov": "Kad su dva zahtjeva fizički nespojiva, reci to",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 1,
+   "izlaznih": 0
+  },
+  {
+   "id": "PRAVILO-08",
+   "naslov": "Jedno mjesto istine za kontakt",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 1,
+   "izlaznih": 0
+  },
+  {
+   "id": "PRAVILO-09",
+   "naslov": "Isporuka mora preživjeti kontejner",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 2,
+   "izlaznih": 0
+  },
+  {
+   "id": "PRAVILO-10",
+   "naslov": "Necjelobrojno uzorkovanje kadrova pravi zamrzavanja",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 2,
+   "izlaznih": 0
+  },
+  {
+   "id": "PRAVILO-11",
+   "naslov": "Sloj sa `opacity: 0` mora imati `pointer-events: none`",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 1,
+   "izlaznih": 0
+  },
+  {
+   "id": "PRAVILO-12",
+   "naslov": "`import * as Icons` uvuče cijelu biblioteku",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 3,
+   "izlaznih": 0
+  },
+  {
+   "id": "PRAVILO-13",
+   "naslov": "Forma bez `action`/`fetch` je tiho bacanje mušterija",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 1,
+   "izlaznih": 0
+  },
+  {
+   "id": "PRAVILO-14",
+   "naslov": "SPA bez fallbacka vraća 404 na dijeljene linkove",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 1,
+   "izlaznih": 0
+  },
+  {
+   "id": "PRAVILO-15",
+   "naslov": "Pitaj samo kad odgovor mijenja posao",
+   "vrsta": "pravilo",
+   "izvor": "PRAVILA.md",
+   "ulaznih": 0,
+   "izlaznih": 2
+  }
+ ],
+ "veze": [
+  {
+   "from": "GRESKA-01",
+   "to": "PRAVILO-02"
+  },
+  {
+   "from": "GRESKA-01",
+   "to": "PRAVILO-08"
+  },
+  {
+   "from": "GRESKA-01",
+   "to": "PRAVILO-02"
+  },
+  {
+   "from": "GRESKA-01",
+   "to": "PRAVILO-08"
+  },
+  {
+   "from": "GRESKA-02",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-02",
+   "to": "PRAVILO-07"
+  },
+  {
+   "from": "GRESKA-02",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-02",
+   "to": "PRAVILO-07"
+  },
+  {
+   "from": "GRESKA-03",
+   "to": "MJERA-09"
+  },
+  {
+   "from": "GRESKA-03",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-03",
+   "to": "MJERA-09"
+  },
+  {
+   "from": "GRESKA-03",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-04",
+   "to": "PRAVILO-10"
+  },
+  {
+   "from": "GRESKA-04",
+   "to": "PRAVILO-10"
+  },
+  {
+   "from": "GRESKA-05",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-05",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-06",
+   "to": "PRAVILO-05"
+  },
+  {
+   "from": "GRESKA-06",
+   "to": "PRAVILO-05"
+  },
+  {
+   "from": "GRESKA-07",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-07",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-08",
+   "to": "PRAVILO-04"
+  },
+  {
+   "from": "GRESKA-08",
+   "to": "PRAVILO-04"
+  },
+  {
+   "from": "GRESKA-09",
+   "to": "PRAVILO-11"
+  },
+  {
+   "from": "GRESKA-09",
+   "to": "PRAVILO-11"
+  },
+  {
+   "from": "GRESKA-10",
+   "to": "PRAVILO-13"
+  },
+  {
+   "from": "GRESKA-10",
+   "to": "PRAVILO-13"
+  },
+  {
+   "from": "GRESKA-11",
+   "to": "PRAVILO-14"
+  },
+  {
+   "from": "GRESKA-11",
+   "to": "PRAVILO-14"
+  },
+  {
+   "from": "GRESKA-12",
+   "to": "PRAVILO-12"
+  },
+  {
+   "from": "GRESKA-12",
+   "to": "PRAVILO-12"
+  },
+  {
+   "from": "GRESKA-13",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-13",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-14",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-14",
+   "to": "GRESKA-02"
+  },
+  {
+   "from": "GRESKA-14",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-14",
+   "to": "GRESKA-02"
+  },
+  {
+   "from": "GRESKA-15",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-15",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-16",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "GRESKA-16",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "MJERA-01",
+   "to": "PRAVILO-03"
+  },
+  {
+   "from": "MJERA-01",
+   "to": "OTV-01"
+  },
+  {
+   "from": "MJERA-01",
+   "to": "PRAVILO-03"
+  },
+  {
+   "from": "MJERA-01",
+   "to": "OTV-01"
+  },
+  {
+   "from": "MJERA-02",
+   "to": "PRAVILO-03"
+  },
+  {
+   "from": "MJERA-02",
+   "to": "MJERA-03"
+  },
+  {
+   "from": "MJERA-02",
+   "to": "PRAVILO-03"
+  },
+  {
+   "from": "MJERA-02",
+   "to": "MJERA-03"
+  },
+  {
+   "from": "MJERA-03",
+   "to": "PRAVILO-03"
+  },
+  {
+   "from": "MJERA-03",
+   "to": "PRAVILO-03"
+  },
+  {
+   "from": "MJERA-04",
+   "to": "MJERA-06"
+  },
+  {
+   "from": "MJERA-04",
+   "to": "MJERA-06"
+  },
+  {
+   "from": "MJERA-05",
+   "to": "OTV-01"
+  },
+  {
+   "from": "MJERA-05",
+   "to": "OTV-01"
+  },
+  {
+   "from": "MJERA-07",
+   "to": "MJERA-06"
+  },
+  {
+   "from": "MJERA-07",
+   "to": "MJERA-06"
+  },
+  {
+   "from": "MJERA-08",
+   "to": "GRESKA-04"
+  },
+  {
+   "from": "MJERA-08",
+   "to": "PRAVILO-10"
+  },
+  {
+   "from": "MJERA-08",
+   "to": "GRESKA-04"
+  },
+  {
+   "from": "MJERA-08",
+   "to": "PRAVILO-10"
+  },
+  {
+   "from": "MJERA-09",
+   "to": "GRESKA-03"
+  },
+  {
+   "from": "MJERA-09",
+   "to": "GRESKA-03"
+  },
+  {
+   "from": "MJERA-10",
+   "to": "GRESKA-12"
+  },
+  {
+   "from": "MJERA-10",
+   "to": "PRAVILO-12"
+  },
+  {
+   "from": "MJERA-10",
+   "to": "GRESKA-12"
+  },
+  {
+   "from": "MJERA-10",
+   "to": "PRAVILO-12"
+  },
+  {
+   "from": "MJERA-11",
+   "to": "GRESKA-06"
+  },
+  {
+   "from": "MJERA-11",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "MJERA-11",
+   "to": "GRESKA-06"
+  },
+  {
+   "from": "MJERA-11",
+   "to": "PRAVILO-01"
+  },
+  {
+   "from": "MJERA-12",
+   "to": "GRESKA-01"
+  },
+  {
+   "from": "MJERA-12",
+   "to": "PRAVILO-02"
+  },
+  {
+   "from": "MJERA-12",
+   "to": "GRESKA-01"
+  },
+  {
+   "from": "MJERA-12",
+   "to": "PRAVILO-02"
+  },
+  {
+   "from": "MJERA-14",
+   "to": "MJERA-10"
+  },
+  {
+   "from": "MJERA-14",
+   "to": "PRAVILO-12"
+  },
+  {
+   "from": "MJERA-14",
+   "to": "GRESKA-12"
+  },
+  {
+   "from": "MJERA-14",
+   "to": "MJERA-10"
+  },
+  {
+   "from": "MJERA-14",
+   "to": "PRAVILO-12"
+  },
+  {
+   "from": "MJERA-14",
+   "to": "GRESKA-12"
+  },
+  {
+   "from": "MJERA-13",
+   "to": "OTV-04"
+  },
+  {
+   "from": "MJERA-13",
+   "to": "OTV-04"
+  },
+  {
+   "from": "OTV-01",
+   "to": "MJERA-05"
+  },
+  {
+   "from": "OTV-01",
+   "to": "MJERA-01"
+  },
+  {
+   "from": "OTV-01",
+   "to": "PRAVILO-02"
+  },
+  {
+   "from": "OTV-01",
+   "to": "MJERA-05"
+  },
+  {
+   "from": "OTV-01",
+   "to": "MJERA-01"
+  },
+  {
+   "from": "OTV-01",
+   "to": "PRAVILO-02"
+  },
+  {
+   "from": "OTV-02",
+   "to": "PRAVILO-02"
+  },
+  {
+   "from": "OTV-02",
+   "to": "PRAVILO-02"
+  },
+  {
+   "from": "OTV-03",
+   "to": "MJERA-06"
+  },
+  {
+   "from": "OTV-03",
+   "to": "MJERA-06"
+  },
+  {
+   "from": "OTV-04",
+   "to": "MJERA-13"
+  },
+  {
+   "from": "OTV-04",
+   "to": "MJERA-13"
+  },
+  {
+   "from": "OTV-05",
+   "to": "PRAVILO-09"
+  },
+  {
+   "from": "OTV-05",
+   "to": "PRAVILO-09"
+  },
+  {
+   "from": "OTV-06",
+   "to": "PRAVILO-09"
+  },
+  {
+   "from": "OTV-06",
+   "to": "PRAVILO-09"
+  },
+  {
+   "from": "PRAVILO-03",
+   "to": "MJERA-01"
+  },
+  {
+   "from": "PRAVILO-03",
+   "to": "MJERA-02"
+  },
+  {
+   "from": "PRAVILO-03",
+   "to": "MJERA-04"
+  },
+  {
+   "from": "PRAVILO-03",
+   "to": "MJERA-01"
+  },
+  {
+   "from": "PRAVILO-03",
+   "to": "MJERA-02"
+  },
+  {
+   "from": "PRAVILO-03",
+   "to": "MJERA-04"
+  },
+  {
+   "from": "PRAVILO-06",
+   "to": "MJERA-06"
+  },
+  {
+   "from": "PRAVILO-06",
+   "to": "MJERA-07"
+  },
+  {
+   "from": "PRAVILO-06",
+   "to": "MJERA-06"
+  },
+  {
+   "from": "PRAVILO-06",
+   "to": "MJERA-07"
+  },
+  {
+   "from": "PRAVILO-15",
+   "to": "OTV-05"
+  },
+  {
+   "from": "PRAVILO-15",
+   "to": "OTV-05"
+  }
+ ]
+}

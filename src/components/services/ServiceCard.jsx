@@ -1,10 +1,21 @@
-import { CheckCircle } from 'lucide-react'
-import * as Icons from 'lucide-react'
+import {
+  CheckCircle, Monitor, Cpu, Snowflake, Cable, Activity,
+  BatteryCharging, ShieldCheck, CircuitBoard, Zap,
+} from 'lucide-react'
 import Card from '../ui/Card'
 import ScrollReveal from '../ui/ScrollReveal'
 
+/* Statička mapa umjesto `import * as Icons`. Barrel import sa dinamičkim
+   pristupom onemogući tree-shaking i uvuče cijeli lucide set (~1600 ikona,
+   1,04 MB sirovo / 287 KB gzip) u bundle. Ovih osam su sve koje site.js
+   zaista traži; nova ikona se dodaje ovdje. */
+const ICONS = {
+  Monitor, Cpu, Snowflake, Cable, Activity,
+  BatteryCharging, ShieldCheck, CircuitBoard,
+}
+
 export default function ServiceCard({ service, index }) {
-  const Icon = Icons[service.icon] || Icons.Zap
+  const Icon = ICONS[service.icon] || Zap
 
   return (
     <ScrollReveal delay={index * 0.1}>
