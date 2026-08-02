@@ -1585,17 +1585,21 @@ Three paths, cheapest first:
 cp .claude/skills/premium-web/assets/trade-paths/route-line.svg src/partials/hero-path.svg
 
 # B. SET-G — logo only. Vectorise the client's own mark, then draw its outline.
-sudo apt-get install -y potrace 2>/dev/null || pip install --user potracer   # potracer = pure-python fallback
-node --input-type=module -e "
-import sharp from './work/tools/node_modules/sharp/lib/index.js';
-await sharp('work/<slug>/raw/logo.png').flatten({background:'#fff'}).threshold(180)
-  .toColourspace('b-w').toFile('work/<slug>/out/logo.pbm');
-const { dominant } = await sharp('work/<slug>/raw/logo.png').stats();
-console.log('palette seed', '#' + [dominant.r,dominant.g,dominant.b].map(v=>v.toString(16).padStart(2,'0')).join(''));
-"
-potrace work/<slug>/out/logo.pbm -s -o work/<slug>/out/logo-traced.svg --flat
-# Then: open logo-traced.svg, keep the outline, delete fills, add fill="none" stroke="currentColor",
-# and add class="tp-ln" pathLength="1" style="--i:N" to each path so it matches the contract above.
+#    The full method (logo-palette.mjs, vectorize.mjs, knockout.mjs, the reveal and its
+#    mobile trap) is industry-playbooks.md §14.2-14.5 and is NOT repeated here. Two
+#    things that block are worth stating at the point of use:
+#      - There is NO `potrace` / `mkbitmap` CLI in this container and none is needed.
+#        The npm package `potrace` (2.1.8) is pure JS. Do not reach for apt-get or sudo.
+#      - Do NOT seed the palette from sharp.stats().dominant. On a logo on a white card
+#        it returns { r:248, g:248, b:248 } — the card, not the brand. Measured, verbatim.
+#        Use logo-palette.mjs (industry-playbooks.md §14.2), which rejects the card.
+npm --prefix work/tools i --silent potrace           # 2.1.8, no system binary, no sudo
+node work/tools/logo-palette.mjs work/<slug>/raw/logo.png > work/<slug>/logo-palette.json
+node work/tools/vectorize.mjs   work/<slug>/raw/logo.png   work/<slug>/out/logo-traced.svg
+# traced -> work/<slug>/out/logo-traced.svg  paths:1  bytes:20752   (6-25 KB is the normal range)
+# potrace emits ONE filled path holding many M…Z subpaths. Normalise it to this file's
+# contract with the same one-liner as C below — fill:none + stroke:currentColor is applied
+# by the R6 CSS, and --i gives you the stagger the shipped trade paths get for free.
 
 # C. Author a new path over the client's own photo (wiring run, cut line, roof pitch).
 #    Trace it in any editor at 240x160, then run the same normalisation:

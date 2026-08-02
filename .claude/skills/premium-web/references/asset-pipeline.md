@@ -113,9 +113,13 @@ $ "$FF" -hide_banner -i work/<slug>/raw/clip.mp4 2>&1 | grep -E 'Duration|Stream
 ### 1.2 sharp does everything; @squoosh/cli does nothing
 
 ```console
-$ node -e "const s=require('./work/tools/node_modules/sharp'); console.log('libvips', s.versions.vips)"
-libvips 8.18.3
+$ node -e "const s=require('./work/tools/node_modules/sharp'); console.log(s.versions.sharp, 'libvips', s.versions.vips)"
+0.34.5 libvips 8.17.3
 ```
+
+That is what `preflight.mjs` pins (`sharp@^0.34`), so it is the version every run of this skill
+actually gets. A newer sharp installed by hand in a scratch directory will report a different
+libvips — quote the number from `work/preflight.json`, never from another project's tree.
 
 One real encode round-trip, not just an import — 2560×1440 AVIF source, 556,997 bytes, resized
 to 1280×720:
@@ -373,7 +377,7 @@ theme assets, photos that top out at 1400px.
 $ node .claude/skills/premium-web/scripts/harvest.mjs https://kovgrad.ba/ --slug kovgrad --max 25
 harvest → /…/work/kovgrad/harvest
 sharp not found — installing into /…/work/tools (build-time only, never a client dependency)
-sharp ok (libvips 8.18.3)
+sharp ok (libvips 8.17.3)
 
 page https://kovgrad.ba/
   html 14.8KB via fetch → 12 candidate(s)
@@ -848,12 +852,18 @@ Promise.all(['prije.jpg','poslije.jpg'].map(f=>sharp('work/<slug>/pair/'+f).meta
 Never pick a frame count first.
 
 ```
-frames per 100vh = frames ÷ (section_vh × scrub_range ÷ 100)
+frames per 100vh = frames ÷ ((section_vh − sticky_child_vh) × scrub_range ÷ 100)
 ```
 
+**Subtract the sticky child.** A 500vh section with a 100svh pinned child only ever *travels*
+400vh; the earlier form of this line omitted that term and reported 21.8 frames/100vh for the
+repo reference where the worked arithmetic in `scrubber-component.md` gets 27.3. Same sequence,
+two answers, and the smaller one talks you into adding frames you do not need.
+
 Under ~6 frames/100vh a sequence reads as stepping. Over ~35 you are paying for frames nobody
-perceives. The per-row section heights and scrub ranges are in `industry-playbooks.md` §0.4 —
-they are the row, not a default.
+perceives. This band is the authority for the whole skill — `scripts/frames.mjs` reads it out of
+here rather than carrying its own copy. The per-row section heights and scrub ranges are in
+`industry-playbooks.md` §0.4 — they are the row, not a default.
 
 The commonly-quoted "20–40 frames per 100vh" and "60–180 frames" figures are **uncited
 heuristics**. Validate against the measured Apple reference instead: **147 frames at 1158×770,
@@ -1159,7 +1169,7 @@ Everything below ran in this container on **2026-08-02** and produced the stated
 | `npm --prefix work/tools i sharp ffmpeg-static` | 20 packages, ~4 s |
 | `node -p "require('…/ffmpeg-static')" ; $FF -version` | `ffmpeg version 7.0.2-static … 2000-2024` |
 | `$FF -hide_banner -i clip.mp4 2>&1 \| grep -E 'Duration\|Stream'` | `Duration: 00:00:04.00 … 1920x1080 … 30 fps` |
-| `sharp.versions.vips` | `8.18.3` |
+| `sharp.versions.sharp` / `.vips` | `0.34.5` / `8.17.3` (what `sharp@^0.34` resolves to here) |
 | sharp 2560×1440 → 1280×720 `webp {q:72,effort:4}` | 117,420 bytes |
 | sharp 2560×1440 → 1280×720 `avif {q:50}` | 70,467 bytes |
 | sharp 2560×1440 → 1280×720 `jpeg {q:78,mozjpeg}` | 130,452 bytes |

@@ -169,15 +169,27 @@ function parseArgs(argv) {
 }
 
 /**
- * One shared build-time tool directory per project: `work/tools/`. Matches the convention
- * in references/animation-recipes.md §0 so sharp/ffmpeg-static are installed once, not
- * once per client, and never into the client's own package.json.
+ * One shared build-time tool directory per project: `<cwd>/work/tools/`.
+ *
+ * This MUST agree with scripts/preflight.mjs and scripts/frames.mjs, which both use
+ * `PREMIUM_WEB_TOOLS || <cwd>/work/tools`. It used to be derived from `--out` instead, so
+ * an `--out` outside a `work/` tree (a scratch dir, /tmp, anywhere) sent harvest off to
+ * install a SECOND, newer sharp of its own — and then the run reported a different libvips
+ * than `work/preflight.json` did, for the same repo, in the same session. tool-ladder.md
+ * promises "run preflight first, every later script re-probes nothing"; that promise is
+ * only true if every script looks in the same place.
+ *
+ * `--out`-relative resolution survives only as a fallback, for the case where a `work/`
+ * tree already exists alongside the output and cwd is somewhere unrelated.
  */
 function defaultToolsDir(out) {
+  if (process.env.PREMIUM_WEB_TOOLS) return path.resolve(process.env.PREMIUM_WEB_TOOLS);
+  const shared = path.join(process.cwd(), 'work', 'tools');
+  if (fs.existsSync(shared)) return shared;
   const parts = path.resolve(out).split(path.sep);
   const i = parts.lastIndexOf('work');
   if (i > 0) return parts.slice(0, i + 1).concat('tools').join(path.sep);
-  return path.join(path.dirname(path.resolve(out)), 'tools');
+  return shared;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -1222,6 +1234,7 @@ async function main() {
   else warn('sharp unavailable — assets will still download, but the manifest will carry no dimensions/luminance/subject score.');
 
   let pw = null, browser = null, ctx = null;
+  let renderedHarvestRan = false;   // did Chromium actually render a page? drives the advice below
   const wantBrowser = opt.browser === 'force';
   async function ensureBrowser() {
     if (ctx || opt.browser === 'off') return ctx;
@@ -1243,8 +1256,27 @@ async function main() {
     // Proxy-safe routing: in sandboxes Chromium's own stack is often blocked even when
     // HTTPS_PROXY is set. Route page requests through Playwright's Node-side fetcher,
     // which honours the environment proxy. Never disable TLS verification.
+    // LOOPBACK IS NEVER PROXIED. A local preview (vite preview, `npx serve dist`, the
+    // fixture server you harvest against in a test) has no business going through an
+    // egress proxy: a proxy that does not exempt loopback either refuses the request or
+    // resolves 127.0.0.1 to ITSELF, which turns a working local page into an unexplained
+    // abort. This matches the rule in references/delivery.md §0.2 — route cross-origin
+    // traffic, never loopback.
+    //
+    // Honesty about the evidence: in THIS container the guard is belt-and-braces. NO_PROXY
+    // already lists 127.0.0.0/8, and harvesting http://127.0.0.1:8123/ succeeds with the
+    // guard forced off even after unsetting NO_PROXY — so the failure above was not
+    // reproduced here. Keep the guard anyway: it costs one URL parse, and NO_PROXY
+    // coverage is an environment detail this script must not depend on.
     if (process.env.HTTPS_PROXY || process.env.https_proxy) {
       await ctx.route('**/*', async (route) => {
+        const target = route.request().url();
+        let isLoopback = false;
+        try {
+          const h = new URL(target).hostname.replace(/^\[|\]$/g, '');
+          isLoopback = h === 'localhost' || h === '::1' || h === '0.0.0.0' || /^127\./.test(h);
+        } catch { /* unparseable — treat as remote and route it */ }
+        if (isLoopback) return route.continue();
         try { await route.fulfill({ response: await ctx.request.fetch(route.request(), { timeout: opt.timeout, maxRedirects: 5 }) }); }
         catch { await route.abort(); }
       });
@@ -1299,6 +1331,7 @@ async function main() {
       if (c) {
         const b = await browserHarvest(pw, c, pageUrl, Math.max(opt.timeout, 45000));
         if (b.ok) {
+          renderedHarvestRan = true;
           log(`  ${C.dim}rendered → ${b.candidates.length} candidate(s)${C.off}`);
           if (harvested) {
             const seen = new Set(harvested.candidates.map((x) => x.url));
@@ -1399,6 +1432,27 @@ async function main() {
       return;
     }
     const buf = res.buf;
+
+    // SOFT 404. A great many CMS and SPA hosts answer a dead asset URL with HTTP 200 and
+    // the site's own HTML error page. Without this check that lands as either a mystifying
+    // "below --min-bytes" skip, or — with --keep-small — an HTML document written into
+    // raw/ under a .jpg name, which then fails to probe and pollutes the manifest.
+    // Name it for what it is: the URL is dead, and it belongs in FAILED.md.
+    // SVG is exempt: it IS a text format, and hosts serve it as image/svg+xml, text/xml,
+    // application/xml or (wrongly) text/plain. Rejecting it here would throw away the logo,
+    // which is the single asset that keeps SET-G reachable.
+    const isSvg = /\.svg(\?|#|$)/i.test(a.url) || /^image\/svg/i.test(res.contentType || '') || /<svg[\s>]/i.test(buf.slice(0, 400).toString('latin1'));
+    const ctLower = String(res.contentType || '').split(';')[0].trim().toLowerCase();
+    const looksTextual = /^(text\/|application\/(xhtml\+xml|json|javascript)$)/.test(ctLower);
+    const htmlMagic = /^\s*(<!doctype html|<html[\s>])/i.test(buf.slice(0, 200).toString('latin1'));
+    if (!isSvg && (looksTextual || htmlMagic)) {
+      const reason = `server returned ${ctLower || 'a text document'} for an asset URL — soft 404 (an HTML error page served with HTTP 200), not an image`;
+      failures.push({ ...a, reason, suggestedFile: `${safeName(baseName(a.url))}.${extFor(a.url, '')}` });
+      err(`  fail ${a.url.slice(0, 90)}`);
+      err(`       ${reason}`);
+      return;
+    }
+
     if (!opt.keepSmall && buf.length < opt.minBytes && a.kind !== 'video') {
       skipped.push({ ...a, reason: `below --min-bytes (${buf.length} < ${opt.minBytes})` });
       return;
@@ -1549,12 +1603,30 @@ async function main() {
     console.log('  obtained, so nothing can be classified and recipes R1–R5 and R7 are OFF THE');
     console.log('  TABLE. Do not proceed as if assets exist. Do not substitute stock silently.');
     console.log('');
+    // Only offer remedies that exist. Pointing at a FAILED.md that was never written
+    // (zero candidates => zero failures) or at --browser when Chromium already rendered
+    // the page sends the next agent chasing a file and a flag that cannot help it.
     console.log('  In order, do this:');
-    console.log(`   1. Open ${failedPath} and run the curl blocks — they usually work from a`);
-    console.log('      normal machine even when they fail from here.');
-    console.log('   2. Re-run with --browser to force the Chromium rendered harvest.');
-    console.log(`   3. Ask the client for the original files and drop them in ${rawDir}/`);
-    console.log('   4. Only if all three fail: build SET-F (R9 kinetic type + R6 over a shipped');
+    let n = 0;
+    if (failures.length) {
+      console.log(`   ${++n}. Open ${failedPath} and run the ${failures.length} curl block(s) — they usually work from a`);
+      console.log('      normal machine even when they fail from here.');
+    } else {
+      console.log(`   ${++n}. There is no FAILED.md: nothing failed, because no image URL was ever found.`);
+      console.log('      The pages parsed but reference no imagery this script can reach — so the');
+      console.log('      problem is upstream of the download ladder. Check that these URLs are the');
+      console.log('      right pages, and look at the page in a browser yourself.');
+    }
+    if (opt.browser === 'off') {
+      console.log(`   ${++n}. Re-run WITHOUT --no-browser so the Chromium rendered harvest can run.`);
+    } else if (!renderedHarvestRan) {
+      console.log(`   ${++n}. Re-run with --browser to force the Chromium rendered harvest (it did not run).`);
+    } else {
+      console.log(`   ${++n}. The Chromium rendered harvest ALREADY ran on this pass and still found`);
+      console.log('      nothing — do not re-run with --browser expecting a different answer.');
+    }
+    console.log(`   ${++n}. Ask the client for the original files and drop them in ${rawDir}/`);
+    console.log(`   ${++n}. Only if all of the above fail: build SET-F (R9 kinetic type + R6 over a shipped`);
     console.log('      trade path) or SET-G if a logo exists, and SAY SO OUT LOUD to the user.');
     console.log('');
   } else {

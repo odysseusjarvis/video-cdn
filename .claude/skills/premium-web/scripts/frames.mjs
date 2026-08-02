@@ -50,22 +50,18 @@
  * ===========================================================================
  * FRAME COUNT vs SMOOTHNESS — derive it from scroll distance, do not guess it.
  * ===========================================================================
- * frames per 100vh = frames / (scrollVh / 100), where scrollVh is the scroll
- * distance the frames are actually mapped over — NOT the section height. The
- * repo reference maps frames to progress 0.10-0.65 of a 500vh section with a
- * 100vh sticky child: 0.55 x 400vh = 220vh over 60 frames = 27.3 frames/100vh.
- *   < 12 frames total            -> reads steppy in sequence mode; use crossfade
- *                                   (R4), which hides the gaps between subjects
- *   < 12 frames/100vh            -> visible stepping; lengthen the section or
- *                                   switch to crossfade
- *   12-45 frames/100vh           -> fine. The widely-repeated "20-40" figure is
- *                                   an UNCITED heuristic; treat it as a range,
- *                                   not a spec
- *   > 45 frames/100vh            -> you are paying bytes nobody can perceive;
- *                                   decimate with --stride
- * Measured anchor instead of folklore: Apple's own sequence is 147 frames at
- * 1158x770, ~42.5 KB average, ~6.2 MB total — restrained in RESOLUTION, not in
- * payload.
+ * The band (~6 frames/100vh stepping, ~35 wasteful), the reasoning for why
+ * SHORTENING a steppy section makes it worse, and the measured Apple anchor are
+ * all in references/asset-pipeline.md §5.4 and references/scrubber-component.md.
+ * They are NOT restated here — this script only applies them.
+ *
+ * The one thing this file owns is the input: --scroll-vh is the distance the
+ * frames are actually MAPPED OVER, not the section height. For the repo
+ * reference (500vh section, 100svh sticky child, scrollRange [0.10, 0.65]):
+ *     scrollable travel = 500 - 100          = 400vh
+ *     mapped range      = (0.65 - 0.10) x 400 = 220vh   <- this is --scroll-vh
+ * Passing the section height instead understates the cadence by ~2x and will
+ * talk you into shipping frames nobody perceives.
  *
  * ===========================================================================
  * CONTAINER GROUND TRUTH
@@ -166,7 +162,19 @@ if (!['webp', 'avif', 'jpeg'].includes(FORMAT)) die(1, `--format must be webp, a
 const EXT = FORMAT === 'jpeg' ? 'jpg' : FORMAT;
 const DEFAULT_Q = { webp: 72, avif: 50, jpeg: 78 }[FORMAT];
 const QUALITY = clampInt(args.quality, DEFAULT_Q, 30, 100);
-const [W_DESKTOP, W_MOBILE] = String(args.widths || '1600,960').split(',').map((s) => clampInt(s, 0, 240, 4096));
+// --widths takes TWO values. `--widths 1600` and `--widths abc` used to sail past this line
+// as NaN/0 and then die inside sharp with "Expected positive integer for width but received
+// NaN" and exit 3 (internal error) — a typo reported as a crash. Validate it here and exit 1.
+const [W_DESKTOP, W_MOBILE] = (() => {
+  const raw = String(args.widths ?? '1600,960').split(',').map((s) => s.trim());
+  if (raw.length !== 2) die(1, `--widths takes exactly two comma-separated px values, desktop,mobile (got "${args.widths}"). Example: --widths 1600,960`);
+  const n = raw.map((s) => Number(s));
+  if (!n.every((v) => Number.isFinite(v) && v >= 240 && v <= 4096)) {
+    die(1, `--widths values must be integers between 240 and 4096 px (got "${args.widths}"). Example: --widths 1600,960`);
+  }
+  if (n[1] > n[0]) die(1, `--widths is desktop,mobile — the mobile width (${n[1]}) cannot exceed the desktop width (${n[0]})`);
+  return n.map((v) => Math.round(v));
+})();
 const FIT = args.fit === 'contain' ? 'contain' : 'cover';
 const FPS = Number(args.fps || 12);
 const MAX_FRAMES = clampInt(args['max-frames'], 96, 2, 600);
@@ -425,11 +433,22 @@ async function makePoster(srcFile, w, h) {
 
 /* ============================================================ public path == */
 
+/* The href the shipped markup will use. Only a path under a `public/` (or `static/`)
+   root can be turned into a real site URL; anything else is a guess, and the guess must
+   never be a traversal. `path.relative` from CWD to an output outside the project emits
+   `../../..`, which produced hrefs like `/../../../tmp/out/poster.jpg` — a preload tag
+   that 404s on every host. Fall back to the last path segment and say it is a guess. */
+let hrefIsGuess = false;
 function publicHref(absDir) {
   const norm = absDir.split(path.sep).join('/');
-  const i = norm.lastIndexOf('/public/');
-  if (i !== -1) return norm.slice(i + '/public'.length);
-  return '/' + path.relative(CWD, absDir).split(path.sep).join('/');
+  for (const root of ['/public/', '/static/']) {
+    const i = norm.lastIndexOf(root);
+    if (i !== -1) return norm.slice(i + root.length - 1);
+  }
+  const rel = path.relative(CWD, absDir).split(path.sep).join('/');
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return '/' + rel;
+  hrefIsGuess = true;
+  return '/' + path.basename(absDir);
 }
 
 /* ==================================================================== main = */
@@ -510,8 +529,16 @@ async function main() {
 
   // Keyframe subset: the every-Nth frames that must land before the scrub is
   // usable. Find the densest subset (>= 8 frames) that fits in 250 KB.
+  //
+  // The upper bound is N, not floor(N / keyframeMinCount). A subset at stride k has
+  // ceil(N / k) frames, so the largest usable k is the one where ceil(N/k) is still
+  // >= keyframeMinCount — the in-loop break below is what enforces that. The old bound
+  // floor(N / 8) is far tighter than the real constraint and skipped valid strides:
+  // at N = 15 it only ever tried k = 1 (all 15 frames, 341 KB) and REFUSED a set that
+  // fits comfortably at k = 2 (8 frames, 182 KB). A legitimate 15-frame ladder that was
+  // 341 KB against a 1.5 MB tier cap could not be emitted at all.
   let keyframes = null;
-  for (let k = Math.max(1, Math.round(N / 16)); k <= Math.max(1, Math.floor(N / BUDGET.keyframeMinCount)); k++) {
+  for (let k = Math.max(1, Math.round(N / 16)); k <= N; k++) {
     const idx = []; for (let i = 0; i < N; i += k) idx.push(i);
     if (idx.length < Math.min(BUDGET.keyframeMinCount, N)) break;
     const bytes = idx.reduce((a, i) => a + ladders.mobile.sizes[i], 0);
@@ -625,9 +652,17 @@ async function main() {
     scroll: {
       scrollVh: SCROLL_VH,
       framesPer100vh: Number(framesPer100vh.toFixed(1)),
-      guidance: framesPer100vh < 12 ? 'below 12 frames/100vh will visibly step — lengthen the section or switch to crossfade'
-        : framesPer100vh > 45 ? 'above 45 frames/100vh you are paying bytes nobody perceives — raise --stride'
-          : 'within the 12-45 frames/100vh working range (the "20-40" figure is an uncited heuristic)',
+      // from-pair is a TWO-image wipe (R3): the transition is interpolated by the
+      // compositor from one clip/transform, not stepped through frames. Scoring it on
+      // frames/100vh told the user their deliberate 2-frame set "will visibly step" and
+      // to "switch to crossfade" — advice that is wrong for the mode they asked for.
+      // Band per references/asset-pipeline.md §5.4 — the authority. Do not fork it here.
+      guidance: MODE === 'from-pair'
+        ? 'n/a for a before/after wipe — R3 interpolates one clip-path/transform between two stills, so frames/100vh does not apply'
+        : framesPer100vh < 6 ? 'below ~6 frames/100vh reads as stepping — add frames or lengthen the mapped range. Do NOT shorten the section: asset-pipeline.md §5.4 explains why that makes it worse'
+          : framesPer100vh > 35 ? 'above ~35 frames/100vh you are paying bytes nobody perceives — raise --stride'
+            : 'within the ~6-35 frames/100vh working band (asset-pipeline.md §5.4)',
+      guidanceSource: 'references/asset-pipeline.md §5.4',
     },
     totals: {
       emittedBytes,
@@ -641,7 +676,15 @@ async function main() {
       width: TIERS[0].w, height: TIERS[0].h,
       poster: `${href}/poster.jpg`,
       src: `(i, tier) => \`${href}/\${tier === 'full' ? 'desktop' : 'mobile'}/frame-\${String(i).padStart(4, '0')}.${EXT}\``,
+      // restFrame IS the prefers-reduced-motion end state. Naming it here means the
+      // component never has to guess, and "show the end state instantly, never show
+      // nothing" has a concrete frame index attached to it for this specific set.
       restFrame: MODE === 'from-pair' ? 1 : N - 1,
+      reducedMotion: {
+        drawFrame: MODE === 'from-pair' ? 1 : N - 1,
+        collapseTrackTo: '100vh',
+        note: 'Under prefers-reduced-motion: reduce, draw this frame statically and collapse the pinned track to one viewport. Do NOT leave the tall scroll section in place — verify.mjs REDUCED-MOTION fails a tall empty track, and a user scrolling through screens of nothing is the bug that check exists for.',
+      },
       preloadHead: `<link rel="preload" as="image" href="${href}/poster.jpg" fetchpriority="high">`,
     },
     budgets: BUDGET,
@@ -673,10 +716,14 @@ async function main() {
   console.log('');
   console.log(bold('SCROLL'));
   console.log(`  ${N} frames over ${SCROLL_VH}vh = ${framesPer100vh.toFixed(1)} frames/100vh — ${manifest.scroll.guidance}`);
-  console.log(dim(`  anchors: repo reference 60 frames / 220vh = 27.3 · Apple 147 frames @1158x770, ~42.5 KB avg, ~6.2 MB total`));
+  console.log(dim(`  --scroll-vh is the MAPPED range, not the section height (500vh section, 100svh sticky, range 0.10-0.65 => 220). Band + anchors: asset-pipeline.md §5.4`));
   if (N < 12 && MODE !== 'from-pair') console.log(yellow(`  ${N} frames total reads steppy in sequence mode — use crossfade (R4), it hides the gaps between subjects`));
   console.log('');
   console.log(bold('WIRE IT'));
+  if (hrefIsGuess) {
+    console.log(yellow(`  ! --out is outside this project and not under a public/ root, so the href below is a GUESS.`));
+    console.log(yellow(`    Re-run with --out <project>/public/… , or rewrite the paths by hand before shipping.`));
+  }
   console.log(`  head:  ${manifest.component.preloadHead}`);
   console.log(`  src:   ${manifest.component.src}`);
   console.log(`  count: ${N}   width: ${TIERS[0].w}   height: ${TIERS[0].h}   restFrame: ${manifest.component.restFrame}` +

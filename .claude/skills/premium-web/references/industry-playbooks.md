@@ -70,7 +70,7 @@ Four recipes carry twelve trades. The differentiation is **in the numbers**, and
 
 Read that table sideways once. R4 appears four times and behaves four different ways: a hotel dissolves continuously so no frame is ever "the" frame; a gym snaps so the rep reads as effort; an estate agent dwells so each room registers as a room; a photo studio cuts hard so the rhythm reads as an edit. **If your build uses R4 with the default parameters regardless of row, you have shipped a recoloured template.**
 
-Derive frame count from scroll distance, never the reverse. `frames per 100vh = frames ÷ (section_vh × scrub_range ÷ 100)`. Under ~6 frames/100vh a sequence reads as stepping; over ~35 you are paying for frames nobody perceives.
+Derive frame count from scroll distance, never the reverse. `frames per 100vh = frames ÷ ((section_vh − sticky_child_vh) × scrub_range ÷ 100)` — subtract the pinned child, it is not travel. Under ~6 frames/100vh a sequence reads as stepping; over ~35 you are paying for frames nobody perceives. Full derivation: `asset-pipeline.md` §5.4.
 
 ### 0.5 Cross-cutting rules that apply to all twelve rows
 
@@ -94,7 +94,15 @@ curl -s "https://gwfh.mranftl.com/api/fonts/bebas-neue" \
 # Bebas Neue ['latin', 'latin-ext']
 ```
 
-Every family named in this file was checked this way against the live API. **Prata failed** (`['latin']` only) and was replaced; it is left documented in §2 as the worked example, because it is a family an agent would otherwise reach for. If you substitute a family, re-run the check — the client's own business name rendering as tofu is the single most embarrassing possible delivery.
+Every family named in this file was checked this way against the live API. The check is `'latin-ext' in subsets` — **not** "is there more than one subset", which is the mistake that lets a trap through:
+
+```bash
+curl -s "https://gwfh.mranftl.com/api/fonts/prata" \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["family"], d["subsets"])'
+# Prata ['cyrillic', 'cyrillic-ext', 'latin', 'vietnamese']
+```
+
+**Prata failed** — four subsets, none of them `latin-ext`. It was replaced, and it is left documented in §2 as the worked example, because it is a family an agent would otherwise reach for. Note what the Prata list does and does not cover: `vietnamese` carries `Đ` (U+0110), so `Đurđević` looks fine while `Šišanje`, `Čačak` and `Žepče` render as tofu — a partial failure is harder to spot than a total one. If you substitute a family, re-run the check; the client's own business name rendering as tofu is the single most embarrassing possible delivery.
 
 Checked and confirmed carrying `latin-ext`: Anton, Archivo, Archivo Narrow, Barlow, Barlow Condensed, Bodoni Moda, Chivo, Cormorant Garamond, Figtree, Fraunces, IBM Plex Sans, Instrument Serif, Inter, Manrope, Marcellus, Newsreader, Oswald, Playfair Display, Public Sans, Saira Condensed, Source Sans 3, Source Serif 4, Space Grotesk, Work Sans.
 
@@ -162,7 +170,7 @@ The scroll *is* the transformation. Nothing else in this skill converts as hard.
 
 **Palette.** Warm neutral base with one saturated accent lifted from the salon's actual interior — a chair, a tile, a wall. Fallback anchors: surface `#F3EDE6`, accent `#8C4A3F`. Explicitly **do not** default to beauty-pink; use it only if the salon really is pink, and if it is, use their pink, sampled.
 
-**Type.** High-contrast display serif over a quiet grotesque — the contrast itself is the "styled" signal. Headings **Bodoni Moda** 400/500 (large, high stroke contrast) or **Playfair Display** 500/700; body **Manrope** 400/600. Barber shops swing harder: **Archivo** 800 uppercase headings + **Barlow** body reads as barber, not salon. (**Prata** is the obvious-looking choice for this row and it is a trap — it ships `latin` only, so `Šišanje` renders as tofu. This is exactly what the check below catches.)
+**Type.** High-contrast display serif over a quiet grotesque — the contrast itself is the "styled" signal. Headings **Bodoni Moda** 400/500 (large, high stroke contrast) or **Playfair Display** 500/700; body **Manrope** 400/600. Barber shops swing harder: **Archivo** 800 uppercase headings + **Barlow** body reads as barber, not salon. (**Prata** is the obvious-looking choice for this row and it is a trap — its subsets are `['cyrillic', 'cyrillic-ext', 'latin', 'vietnamese']`, with no `latin-ext`, so `Šišanje` renders as tofu. This is exactly what the §0.5 check catches.)
 
 **Photos to ask for, in priority order:**
 
@@ -273,21 +281,22 @@ Four-digit padding, always — two digits breaks at frame 100 and the Apple refe
 
 **Fallback — SET-D → R3** before/after wipe on one renovation. **SET-A → R6 blueprint draw**: an SVG elevation/outline of the finished structure stroke-drawing itself over the finished photo. Cheapest possible, unmistakably *gradnja*, and genuinely good.
 
-Use `assets/trade-paths/blueprint-elevation.svg` when there is no photo at all. With `pathLength="1"` on each path you never need `getTotalLength()`:
+Use `assets/trade-paths/blueprint-elevation.svg` when there is no photo at all.
 
-```css
-.blueprint path { stroke-dasharray: 1; stroke-dashoffset: 1; }
-@media not (prefers-reduced-motion: reduce) {
-  @supports (animation-timeline: view()) {
-    .blueprint path {
-      animation: draw linear both;         /* shorthand FIRST */
-      animation-timeline: view();          /* then the timeline — order matters */
-      animation-range: entry 15% cover 60%;
-    }
-  }
-}
-@keyframes draw { to { stroke-dashoffset: 0; } }
-```
+**Do not hand-roll the CSS.** Use the R6 block in `animation-recipes.md` §R6 → *Code* verbatim; this row only supplies the parameters. Two reasons, both measured:
+
+1. **A hidden base layer is a Firefox blackout.** The intuitive version — `stroke-dasharray: 1; stroke-dashoffset: 1` in the base rule, un-hidden inside `@supports (animation-timeline: view())` — renders **0 ink pixels** on any engine without scroll-driven animation. Measured in this container by stripping the `@supports` block (a faithful simulation of Firefox stable) and counting non-white pixels on the shipped `blueprint-elevation.svg` at `stroke-width: 2`, white background:
+
+| Render size | drawn (`stroke-dashoffset: 0`) | hidden base layer (`: 1`) |
+|---|---|---|
+| 480×320 | 11,110 ink px | **0** |
+| 640×427 | 22,444 ink px | **0** |
+| 960×640 | 43,107 ink px | **0** |
+
+The drawn figure scales with render size, which is why it is quoted with one — a bare ink count with no dimensions is not reproducible. The number that matters is the same at every size: **zero**. Firefox stable has not shipped `animation-timeline`, so that is roughly one visitor in six seeing a blank rectangle. R6's contract puts the **fully drawn** graphic in the base layer and only ever hides it inside a rule that can also un-hide it.
+2. **The shipped paths are authored for R6's stagger.** Every element in `assets/trade-paths/*.svg` carries `class="tp-ln" pathLength="1" style="--i:N"` and the wrapping `<g class="tp">` carries `style="--n:COUNT"`. A selector like `.blueprint path` matches them but throws `--i` away, so all eleven paths of the elevation draw in unison instead of building up. `pathLength="1"` is why no `getTotalLength()` is needed anywhere.
+
+Row parameters for građevina: `animation-range: entry 15% cover 60%`, `--spread: .55`, stroke-width 2 (2.5 below 480px).
 
 **Section order** (conversion at 5, but the phone is in the sticky header throughout):
 
@@ -485,35 +494,26 @@ Five items is the whole brief. This row needs the fewest photos of any in the ma
 
 **Primary — every SET class → R6 stroke draw.** This is the only technique in the skill that is pure CSS, universally supported, has zero browser caveats, and costs a few hundred bytes. It is the primary hero here, not a fallback. One path plus 3–5 milestone markers, 240vh, driven by `view()` from 15% to 85%, no smoothing needed, layered over one photograph of their actual vehicle.
 
-Use `pathLength="1"` and you never compute a length:
+Ship `assets/trade-paths/route-line.svg` (or author your own path at `viewBox="0 0 240 160"` and normalise it to the same contract — the one-liner is in `animation-recipes.md` §R6 → *Asset prep* option C). Then use the R6 CSS and `draw.js` from `animation-recipes.md` §R6 → *Code* **verbatim**. This row supplies only the parameters:
 
-```html
-<svg class="route" viewBox="0 0 1200 400" aria-hidden="true">
-  <path pathLength="1" d="M60 320 C 300 300, 420 120, 640 160 S 980 300, 1140 90"
-        fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>
-  <g class="stops">
-    <circle cx="60" cy="320" r="9"/><circle cx="640" cy="160" r="9"/><circle cx="1140" cy="90" r="9"/>
-  </g>
-</svg>
-```
+| Parameter | Transport |
+|---|---|
+| `animation-range` | `entry 15% cover 85%` |
+| `--spread` (stagger across milestones) | `.55` |
+| Milestones | 3–5, as `.tp-ln` elements with ascending `--i` — they inherit the same draw, no separate `pop` keyframe needed |
+| Scrubbed variant | `scrubProgress(stage, { ease: 0.10 })` from §0.7 instead of `draw.js`, over 240vh |
 
-```css
-.route path { stroke-dasharray: 1; stroke-dashoffset: 1; }
-.route .stops circle { opacity: 0; transform: scale(.6); transform-origin: center; }
+**Do not hand-roll a `.route path { stroke-dashoffset: 1 }` base layer.** See §5 for the measurement: a hidden base layer plus an `@supports`-only reveal renders **0 ink pixels** on Firefox stable, which has not shipped `animation-timeline`. R6's contract keeps the fully-drawn graphic in the base layer, ships an `IntersectionObserver` + `--p` fallback as the load-bearing path, and treats the native timeline as enhancement. (Earlier drafts of this file pointed at `scroll-effects.md` for that fallback — it is not there and never was; `animation-recipes.md` §R6 owns it.)
 
-@media not (prefers-reduced-motion: reduce) {
-  @supports (animation-timeline: view()) {
-    .route path   { animation: draw 1s linear both; animation-timeline: view(); animation-range: entry 15% cover 85%; }
-    .route circle { animation: pop 1s linear both;  animation-timeline: view(); animation-range: entry 30% cover 85%; }
-    .route circle:nth-child(2) { animation-range: entry 50% cover 90%; }
-    .route circle:nth-child(3) { animation-range: entry 70% cover 95%; }
-  }
-}
-@keyframes draw { to { stroke-dashoffset: 0; } }
-@keyframes pop  { to { opacity: 1; transform: scale(1); } }
-```
+`pathLength="1"` is what makes all of it work without measurement. Verified in Chromium in this container, counting non-white pixels on a 400×200 white page holding exactly one element — `<path pathLength="1" d="M20 100 H380" stroke-width="10" stroke-linecap="butt" stroke-dasharray="1">`, i.e. a 360×10 = 3,600 px ink rectangle:
 
-Verified in Chromium in this container: with `pathLength="1"`, `stroke-dashoffset: 1` renders **zero** stroke pixels, `0.5` renders exactly half, `0` renders the full path. Firefox stable has not shipped `animation-timeline`, so the `@supports` block is progressive enhancement only — the `IntersectionObserver` class-toggle fallback in `scroll-effects.md` is the load-bearing path. Outside the reduced-motion media query the fully-drawn end state applies statically, which is exactly right.
+| `stroke-dashoffset` | lit px |
+|---|---|
+| `1` | **0** |
+| `0.5` | **1,800** |
+| `0` | **3,600** |
+
+Exactly zero, exactly half, exactly whole — the geometry is spelled out so you can re-run it, because a lit-pixel count with no stated geometry proves nothing.
 
 **Fallback: none needed.** R6 already requires one photo and a hand-authored path. If there is no photo either, `assets/trade-paths/route-line.svg` plus R9 carries the hero on its own.
 
@@ -666,7 +666,7 @@ Set up the tools once, in a build-only directory so the client's `package.json` 
 ```bash
 mkdir -p work/tools && cd work/tools
 npm init -y >/dev/null
-npm i sharp potrace                # verified installs on Node 22 in this container
+npm i sharp potrace                # verified: sharp 0.34.5, potrace 2.1.8, Node 22, no system binary
 ```
 
 ### 14.2 Derive the whole palette from the logo
@@ -797,8 +797,17 @@ console.log(`traced -> ${out}  paths:${paths}  bytes:${svg.length}`);
 
 ```bash
 node work/tools/vectorize.mjs work/harvest/raw/logo.png work/<slug>/logo-traced.svg
-# traced -> work/tuzla-x/logo-traced.svg  paths:1  bytes:6142
+# traced -> work/tuzla-x/logo-traced.svg  paths:1  bytes:6142      <- a simple wordmark
+# traced -> work/setg/logo-traced.svg     paths:1  bytes:16075     <- ring + bar + block mark
+# traced -> work/setg/logo2-traced.svg    paths:1  bytes:7769      <- three flat geometric shapes
+# traced -> work/setg/logo-traced.svg     paths:1  bytes:20752     <- same, plus a 6-letter wordmark
 ```
+
+`paths:1` is the normal result and is not a bug — see §14.4. Byte count scales with the **number of
+curve segments** in the mark, not with the source resolution: flat geometry is cheap, and letterforms
+are what actually cost — adding a six-letter wordmark to the mark above took it from 7,769 to 20,752
+bytes. Anywhere in **6–25 KB** is normal for a real small-business logo. Past ~40 KB, see the budget
+note below: you are tracing a photograph.
 
 Tuning, in the order you should try it:
 
@@ -827,43 +836,15 @@ Always open the result and look at it. A trace that lost the counters of the let
 </svg>
 ```
 
-```css
-.logo-draw path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+The CSS and JS are `animation-recipes.md` §R6 → *Code*, unchanged. Normalise the traced path to R6's contract first (`class="tp-ln" pathLength="1" style="--i:0"`, wrapper `<g class="tp" style="--n:1">`) with the one-liner in §R6 → *Asset prep* option C, then wrap the section in `class="draw"` and load `draw.js`. Row parameter: `animation-range: entry 10% cover 55%`.
 
-/* End state applies statically for reduced motion and for Firefox. */
-@media not (prefers-reduced-motion: reduce) {
-  @supports (animation-timeline: view()) {
-    .logo-draw path {
-      animation: logo-draw 1s linear both;   /* shorthand FIRST */
-      animation-timeline: view();            /* THEN the timeline — reversing these silently breaks it */
-      animation-range: entry 10% cover 55%;
-    }
-  }
-}
-@keyframes logo-draw { to { stroke-dashoffset: 0; } }
-```
+**The one rule that matters more than the parameters:** the fully drawn logo is the **base layer**, and only `.js-draw` / `.sda-draw` ever set it to hidden. Written the intuitive way round — `stroke-dashoffset: 1` in the base rule, un-hidden inside `@supports` — the client's wordmark is **invisible** with JS off, in a crawler, in print, and in Firefox stable, which has not shipped `animation-timeline` (still behind `layout.css.scroll-driven-animations.enabled`; ~16% of visitors). Measured on the shipped `blueprint-elevation.svg` with the `@supports` block removed: **0 ink pixels**, at every render size tested (§5 has the table). For a SET-G build the logo *is* the hero, so this failure mode takes the whole page with it.
 
-```js
-// IntersectionObserver fallback — this is the load-bearing path, not the @supports block.
-// Firefox stable has not shipped animation-timeline (still behind
-// layout.css.scroll-driven-animations.enabled), so ~16% of visitors take this branch.
-if (!CSS.supports("animation-timeline: view()") &&
-    !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      if (!e.isIntersecting) continue;
-      e.target.animate(
-        [{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }],
-        { duration: 1400, easing: "linear", fill: "forwards" }
-      );
-      io.unobserve(e.target);
-    }
-  }, { threshold: 0.35 });
-  document.querySelectorAll(".logo-draw path").forEach((p) => io.observe(p));
-}
-```
+Three things to get right for a traced logo specifically:
 
-Two things to get right: a traced logo is usually **one** path containing many `M…Z` subpaths, so it draws as a single continuous line. If you want stagger, split on `M` into separate `<path>` elements and offset each one's `animation-range`. And add `aria-label` to the `<svg>` with the business name, because this *is* the wordmark — it is not decorative.
+- A traced logo is usually **one** path containing many `M…Z` subpaths, so it draws as a single continuous line. For stagger, split on `M` into separate `<path>` elements and give each an ascending `--i`; R6's `--spread` then does the rest, with no per-element `animation-range`.
+- Add `aria-label` to the `<svg>` with the business name. This *is* the wordmark — it is not decorative, and it is not `aria-hidden`. (The **knockout** overlay in §14.5 is the opposite case: that one *is* `aria-hidden`.)
+- Bump `stroke-width` to 2.5 below 480px or the hairline disappears on a phone.
 
 ### 14.5 Mask-reveal the headline through the logo shape
 
@@ -885,9 +866,13 @@ const [, , w, h] = vb;
 // Outer rect drawn well beyond the art box so the overlay still covers the viewport at scale 1.
 const outer = `M${-w} ${-h} H${w * 2} V${h * 2} H${-w} Z`;
 
+// preserveAspectRatio MUST be "meet", not "slice". See the mobile note below — with
+// "slice" this effect silently dies on every phone. Coverage is not at risk: the outer
+// rect spans -w…2w and -h…2h, i.e. three viewBoxes in each axis, so it still paints past
+// the viewport edge under "meet".
 const out =
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" ` +
-  `preserveAspectRatio="xMidYMid slice" aria-hidden="true">` +
+  `preserveAspectRatio="xMidYMid meet" aria-hidden="true">` +
   `<path fill="var(--surface, #0d0f10)" fill-rule="evenodd" d="${outer} ${d}"/></svg>`;
 
 await fs.writeFile(process.argv[3], out);
@@ -906,9 +891,14 @@ console.log("knockout bytes:", out.length);
                background: var(--surface); }
 .logo-reveal h1 { color: var(--brand); margin: 0; font-size: clamp(2.5rem, 9vw, 7rem); }
 
-.knockout { position: absolute; inset: 0; transform-origin: 50% 50%;
-            transform: scale(1); will-change: transform; }
+/* Start and end scale are PARAMETERS, tuned per breakpoint against the pixel
+   counter below. There is no universally correct pair — see traps 2 and 3. */
+.knockout { --ko-from: 1; --ko-to: 6;   /* 6 is margin over the measured plateau of 3 — re-measure yours */
+            position: absolute; inset: 0; transform-origin: 50% 50%;
+            transform: scale(var(--ko-from)); will-change: transform; }
 .knockout svg { width: 100%; height: 100%; display: block; }
+
+@media (max-width: 768px) { .knockout { --ko-from: .35; --ko-to: 4; } }
 
 @media not (prefers-reduced-motion: reduce) {
   @supports (animation-timeline: view()) {
@@ -919,19 +909,59 @@ console.log("knockout bytes:", out.length);
     }
   }
 }
-@keyframes open { from { transform: scale(1); } to { transform: scale(14); } }
+@keyframes open { from { transform: scale(var(--ko-from)); } to { transform: scale(var(--ko-to)); } }
 
 /* Reduced motion and Firefox: the hole is already open. The headline is simply visible. */
 @media (prefers-reduced-motion: reduce) { .knockout { display: none; } }
 ```
 
-Rendered and verified in Chromium in this container at scale 1 / 3 / 12: at scale 1 only the letters falling inside the traced silhouette are visible; at scale 12 the full headline `AUTO ELEKTRIKA` stands clear on the surface colour. Nothing but `transform` changed between the three states.
+This effect is far more geometry-dependent than it looks, and all three traps below were found by rendering it in Chromium and counting pixels — not by reading the CSS. **Measure your own mark before you ship it.** The harness is six lines:
 
-Three rules for this effect:
+```js
+// Count brand-coloured pixels at a series of scales. Screenshot at 375x812 and 1440x900.
+// If the count does not RISE across the ramp, the reveal is not happening — see the two traps.
+const { data, info } = await sharp(await page.screenshot()).raw().toBuffer({ resolveWithObject: true });
+let brand = 0;
+for (let i = 0; i < data.length; i += info.channels)
+  if (data[i] > 150 && data[i + 1] > 90 && data[i + 1] < 160 && data[i + 2] < 90) brand++;
+```
 
-- **`--surface` on the knockout must be byte-identical to the section background.** One hex off and a visible rectangle edge appears at scale 1.
+Measured in this container, headline `AUTO ELEKTRIKA HODŽIĆ` in `#c8802a` on `#0d0f10`, `.knockout { transform: scale(s) }`, a traced mark whose **centre is solid ink**:
+
+| viewBox fit | viewport | s=1 | s=3 | s=6 | s=12 | s=20 |
+|---|---|---|---|---|---|---|
+| `meet`  | 1440×900 | 42,272 | **62,012** | 62,012 | 62,012 | 62,012 |
+| `slice` | 1440×900 | 60,755 | 62,012 | 62,012 | 62,012 | 62,012 |
+| `meet`  | 375×812  | 7,721 | 7,721 | 7,721 | 7,721 | 7,721 |
+| `slice` | 375×812  | 7,721 | 7,721 | 7,721 | 7,721 | 7,721 |
+
+62,012 / 7,721 is the fully-revealed headline at each viewport. Read the table honestly — it says three things:
+
+**Trap 1 — `slice` kills the reveal, and it does so on the desktop viewport, not the phone.** `preserveAspectRatio` cover-fits (`slice`) to the *larger* viewport axis and contain-fits (`meet`) to the *smaller* one. At 1440×900 landscape, `meet` fits the 900 axis → a 900×900 silhouette, narrower than the headline, so there is a real reveal (42,272 → 62,012, a 47% rise). `slice` fits the 1440 axis → a 1440×1440 silhouette that already clears the headline at scale 1, so the ramp moves 2% and the visitor sees nothing happen. **Use `meet`.**
+
+**Trap 2 — on a portrait phone, scale 1 is already fully open, for both values.** At 375×812 the `meet` art box is 375 wide, which *is* the whole viewport width, so the silhouette starts bigger than the wrapped headline; `slice` is worse but indistinguishable, because both are already past full. The measured counts are identical and flat across the entire ramp. The fix is not `preserveAspectRatio` — **the start scale is a parameter too.** Measured at 375×812 with `meet`: `scale(0.35)` → 3,957 brand px, rising to 7,721 by `scale(1)`. So drive `--ko-from: .35` on mobile and `1` on desktop rather than hard-coding `from { transform: scale(1) }`:
+
+```css
+.knockout { --ko-from: 1; --ko-to: 6; }
+@media (max-width: 768px) { .knockout { --ko-from: .35; --ko-to: 4; } }
+@keyframes open { from { transform: scale(var(--ko-from)); } to { transform: scale(var(--ko-to)); } }
+```
+
+**Trap 3 — a hollow-centred mark runs the effect BACKWARDS and ends on a black screen.** The outer `<svg>` clips to its own viewport, so scaling the overlay magnifies whatever sits at the transform origin. If the centre of the traced mark is a *hole in the overlay* (solid ink in the logo) the hole grows and the page opens. If the centre is *overlay* — a ring, an outline, a wordmark with a gap in the middle — you are magnifying solid surface colour, and the page closes. Measured on a ring-outline mark at `meet`:
+
+| viewport | s=1 | s=3 | s=6 | s=12 | s=20 |
+|---|---|---|---|---|---|
+| 375×812 | 3,194 | 3,450 | 713 | **0** | **0** |
+| 1440×900 | 12,187 | 30,483 | 1,825 | **0** | **0** |
+
+It peaks, then collapses to a fully black hero. **Before using this effect, check that the transform origin lands on ink.** If the mark is an outline or a ring, either re-origin the transform onto a solid part of it (`transform-origin` is free), or skip the knockout and use the §14.4 stroke-draw, which has no such requirement.
+
+Four rules for this effect:
+
+- **Use `preserveAspectRatio="xMidYMid meet"`.** `slice` is the intuitive choice for a full-bleed overlay and it is measurably wrong at desktop widths.
+- **`--surface` on the knockout must be byte-identical to the section background.** One hex off and a visible rectangle edge appears at the start scale.
 - **The `<h1>` is real text underneath, always.** The reveal is decoration over real content; screen readers and search engines see the heading regardless of the overlay, which is `aria-hidden`.
-- **Cap the end scale at what actually clears the viewport.** Scaling to 40 costs nothing visually and everything in rasterisation. 12–16 is normally enough; check at 1440px wide.
+- **Tune `--ko-from` and `--ko-to` per breakpoint against the pixel counter above, and stop at the first scale that reaches the plateau.** Scaling past it costs nothing visually and everything in rasterisation. There is no single correct end scale: the same mark needed 3 at 1440×900 and a *start* below 1 to work at all at 375×812.
 
 For a Firefox-safe non-`@supports` build, drive the same `transform: scale()` from a GSAP ScrollTrigger or an `IntersectionObserver` + Web Animations tween. The property being animated does not change.
 
@@ -962,7 +992,12 @@ Do **not** silently fill a SET-G page with Pexels stock. It breaks the skill's c
 - [ ] The stroke-draw uses `pathLength="1"` (no `getTotalLength()` in the shipped JS)
 - [ ] `animation-timeline` is declared **after** the `animation` shorthand everywhere
 - [ ] An `IntersectionObserver` fallback exists for every `@supports`-gated effect
+- [ ] **The base layer is the fully drawn state.** Delete every `@supports` block and reload: the logo must still be visible. If it vanishes, the shipped site is blank in Firefox.
 - [ ] The knockout `--surface` matches the section background exactly
+- [ ] The knockout `<svg>` uses `preserveAspectRatio="xMidYMid meet"` — **`slice` flatlines the reveal at desktop widths** (measured 2% movement at 1440×900)
+- [ ] **The transform origin lands on ink.** A hollow-centred mark (ring, outline, gapped wordmark) runs the reveal backwards and ends on a black hero — measured 12,187 → 30,483 → 1,825 → **0** across scale 1→12
+- [ ] The knockout reveal was screenshotted at **375×812 as well as 1440×900**, and the brand-pixel count actually **rises** across the ramp at both. At 375×812 that normally requires `--ko-from` **below 1** — at `scale(1)` the `meet` art box is already the full viewport width and nothing is hidden
+- [ ] `--ko-to` stops at the first scale that reaches the plateau, not at a round number
 - [ ] The `<h1>` is real text; the knockout `<svg>` is `aria-hidden="true"`
 - [ ] Zero stock photography on the page, or exactly one with visible attribution
 - [ ] The "tipografski sajt" sentence is in the handover

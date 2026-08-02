@@ -79,10 +79,11 @@ must land *first*. At 1.6 Mbps, 1.5 MB is 7.5 seconds. Split it.
 | Thing | Budget | Notes | Check ID |
 |---|---|---|---|
 | **Everything transferred before LCP** | **≤ 400 KB** | HTML + critical CSS + JS + poster + 2 woff2. This is the number that decides whether the hero exists in under 2.5 s. | `HERO-PAYLOAD` |
-| Poster image alone | ≤ 80 KB | The single LCP image. AVIF q50 or JPEG q75 at the real display width. | `POSTER-BYTES` |
+| Poster image alone | ≤ 80 KB | The LCP image if there is one; otherwise the largest above-the-fold `<img>`, weighed anyway and labelled as such — a text-heavy page can legitimately have a `<p>` as its LCP element while still shipping a poster that must arrive first. | `POSTER-BYTES` |
+| The hero `<img>` is a valid LCP candidate | required | FAIL when its entrance animation starts at `opacity: 0` — an element that has never painted is not an LCP candidate at all, so the optimised poster silently hands LCP to a paragraph. Move the reveal to a wrapper. WARN (not FAIL) when it is a valid candidate that merely lost to a larger text block. | `HERO-LCP-CANDIDATE` |
 | Keyframe subset (the 15–20 frames that make the scrub usable) | ≤ 250 KB | Loads after the poster, before the remainder. | manual, from the frames manifest |
 | Frame sequence remainder, mobile | up to 1.5 MB total | `fetchpriority="low"` on `requestIdleCallback`, after `load`. | `PAGE-PAYLOAD` |
-| Frame sequence, desktop | ≤ 4 MB | | `PAGE-PAYLOAD` with `--budget pageBytesDesktop` |
+| **Whole page at 1440px after a full scroll** (where the desktop ladder lands) | **≤ 4 MB** | Asserted from the bytes the 1440 screenshot pass already downloaded, so it costs no extra page load. Override with `--budget pageBytesDesktop=<bytes>`. | `PAGE-PAYLOAD-DESKTOP` |
 | **Whole page at 375px after a full scroll** | **≤ 1.5 MB** | Everything the phone actually downloads. | `PAGE-PAYLOAD` |
 | **JS, gzipped, whole build** | **≤ 120 KB** | Measured with `zlib.gzipSync(level:9)` on the built `.js`, not from the bundler's own report. | `JS-BUDGET` |
 | CSS, gzipped | ≤ 40 KB | | `CSS-BUDGET` |
@@ -156,7 +157,8 @@ normal site.
 | Every route renders ≥ 400 chars of visible text | strict | `PAGE-RENDERED` |
 | Every declared language is complete | ≥ 60% of the fullest language's text, no untranslated duplicates | `I18N-COMPLETE` |
 | `<html lang>` present and a valid BCP 47 tag | strict | `LANG-ATTR` |
-| No runtime errors, no 4xx/5xx, no failed requests | zero | `RUNTIME` |
+| No runtime errors, no **same-origin** 4xx/5xx, no failed same-origin requests | zero | `RUNTIME` |
+| Cross-origin requests that failed | reported, not ship-blocking | Split out deliberately: inside this container all egress goes through a proxy, so a blocked third-party host is indistinguishable from a dead one and used to NO-SHIP a sound build. The real defect — a third-party host in the critical path — is still caught by name by `FONT-HOST`. | `THIRD-PARTY-REQUESTS` (WARN) |
 
 The placeholder scan is split in two on purpose. Universal patterns (`lorem
 ipsum`, `TODO`, `XXX`, `Vaš tekst`, `Ime firme`, `{{…}}`) run against every text

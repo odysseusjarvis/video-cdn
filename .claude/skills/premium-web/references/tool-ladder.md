@@ -28,6 +28,21 @@ The answer, stated once and honestly: **the entire ladder's Tier 0 rung ships a 
 | hreflang, JSON-LD, OG images, sitemap, Core Web Vitals targets | `i18n-seo.md` |
 | Bundle assembly, zip, verify, export routes, client handover docs | `delivery.md` |
 | Per-trade motion verb, section order, conversion action | `industry-playbooks.md` |
+| **Every gate threshold and its justification, with the gate IDs `verify.mjs` implements** | **`performance-a11y-gates.md`** |
+| Harvest → triage → cutout → frames → compress, step by step | `asset-pipeline.md` |
+| R1–R10 recipe implementations, keyed to the asset class that triggers them | `animation-recipes.md` |
+| Wiring `assets/ScrollScrubber.jsx` and `assets/scroll-reveal.css` into a build | `scrubber-component.md` |
+
+**The runnable half.** Four stages of this ladder are not advice, they are a command. Reach for the script before you hand-roll the stage:
+
+| Stage | Script | Verified run |
+|---|---|---|
+| 0 — prove the toolchain | `scripts/preflight.mjs` | 12 checks, exit 0 |
+| 1 — harvest | `scripts/harvest.mjs <url> --slug <client>` | exit 0, or exit **3** on zero downloads |
+| 5–6 — frames + compression ladder | `scripts/frames.mjs from-video\|from-stills\|from-pair` | exit 0, or exit **2** on a budget breach |
+| 13 — visual verification | `scripts/verify.mjs --dir dist` | exit 0 / **1 = NO-SHIP** |
+
+Run `preflight.mjs` first. Every later script assumes its `work/preflight.json` and re-probes nothing.
 
 ---
 
@@ -37,19 +52,20 @@ Fourteen stages, zero dollars, zero signups, no credit card, no account, nothing
 
 | # | Stage | The free move | Command / entry point |
 |---|---|---|---|
-| 1 | Harvest | Pull the client's own photos off their own site/profile | Playwright + `fetch` with a browser UA and `Referer` |
+| 0 | **Prove the toolchain** | Before any client asset is touched. Checks tools, never credentials. | **`node scripts/preflight.mjs`** |
+| 1 | Harvest | Pull the client's own photos off their own site/profile | **`node scripts/harvest.mjs <url> --slug <client>`** |
 | 2 | Imagery gap-fill | Do **not** reach for stock. Use asset-free recipes, or ask the client for 20 phone photos | `industry-playbooks.md` fallback recipes |
 | 3 | Cutout | `rembg` with the `u2netp` model, offline after first download | `pip install "rembg[cpu,cli]"` → `rembg i -m u2netp in.png out.png` |
 | 4 | Motion origination | Recompose the stills you already have. No generation. | Parallax / before-after wipe / cross-dissolve |
-| 5 | Frame extraction | `ffmpeg-static` from npm — the system binary here is broken | `npm i -D ffmpeg-static` → `require('ffmpeg-static')` |
-| 6 | Compression | `sharp` — WebP, AVIF, mozjpeg, resize ladders, one dependency | `npm i -D sharp` |
+| 5 | Frame extraction | `ffmpeg-static` from npm — the system binary here is broken | **`node scripts/frames.mjs from-video <src.mp4> --out …`** |
+| 6 | Compression | `sharp` — WebP, AVIF, mozjpeg, resize ladders, one dependency | same command; the two-width ladder is emitted in the same pass |
 | 7 | Fonts | Self-host from google-webfonts-helper, **subset `latin` + `latin-ext`** | one `curl` to `gwfh.mranftl.com`, no key |
 | 8 | Icons | Lucide for UI glyphs, **Simple Icons for every brand mark** | already a dep / CC0 download |
 | 9 | Scroll engine | Native CSS `animation-timeline` behind `@supports`, **IntersectionObserver as the load-bearing path** | `scroll-effects.md` §0.5 helper |
 | 10 | Vector motion | `python-lottie` generates Lottie JSON; or hand-authored SVG `stroke-dashoffset` | `pip install lottie` |
 | 11 | 3D | Skip it. If genuinely required: Blender headless + Poly Haven CC0 | `blender -b -P script.py` |
-| 12 | Budgets | Count bytes and decoded memory by hand; `npm run build` output + `du -sh` | `W×H×4×frames` |
-| 13 | **Visual verification** | **Playwright + the Chromium already on disk.** Screenshot, scroll-CLS trace, reduced-motion pass. | `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` |
+| 12 | Budgets | `frames.mjs` refuses to emit an over-budget ladder; `verify.mjs` asserts the rest against `dist/` | `W×H×4×frames`, and the gate IDs in `performance-a11y-gates.md` |
+| 13 | **Visual verification** | **Playwright + the Chromium already on disk.** Screenshot, scroll-CLS trace, reduced-motion pass. | **`node scripts/verify.mjs --dir dist`** → then **`Read` the PNGs in `work/verify/shots/`** |
 | 14 | Hosting & delivery | Zip → `SendUserFile`. Live link: anonymous claimable Netlify draft. Client's permanent host: Cloudflare Pages free. | `delivery.md` §2–3 |
 
 **What the zero-budget column actually gets you:** a self-hosted, multilingual, schema-marked, reduced-motion-correct, sub-400KB-first-viewport site built entirely from the client's own photographs, screenshot-verified at two viewports, delivered as a zip plus a live preview URL. That is the product. Nothing on the paid rungs is required to reach it.
@@ -225,21 +241,70 @@ This stage has exactly one rung and no reason for another. The entire content of
 
 | Tier | Tool | Cost 2026 | Unattended? | What you give up vs the tier above |
 |---|---|---|---|---|
-| **T0** | **`sharp`** — verified here at **0.35.3 / libvips 8.18.3**, prebuilt, zero system deps. WebP, AVIF, mozjpeg, PNG, TIFF, GIF, raw, resize, rotate, stats, metadata — one dependency replacing `cwebp`, `avifenc` and `mozjpeg-cli`. | $0 | **Yes** | Nothing. |
+| **T0** | **`sharp`** — what `preflight.mjs` installs (`sharp@^0.34`) resolves here to **0.34.5 / libvips 8.17.3**, prebuilt, zero system deps. WebP, AVIF, mozjpeg, PNG, TIFF, GIF, raw, resize, rotate, stats, metadata — one dependency replacing `cwebp`, `avifenc` and `mozjpeg-cli`. | $0 | **Yes** | Nothing. |
 | **T1** | `sharp-cli` if you want a shell interface over the same binary | $0 | Yes | — |
 | **T2** | Cloudflare Images (~$5/mo per 100k images stored + delivery) | $5+/mo, `key: user-supplied` | Yes | T0 gives up: on-the-fly variants for images you do not control at build time. For a fixed marketing site, build-time `sharp` is strictly better — the variants are hashed, immutable, and free to serve. |
 | **T3** | imgix / Cloudinary transformation pipelines | $50+/mo | Yes | T2 gives up: DAM features nobody needs for a 12-page site. |
 
-**Measured on this container, just now** (1200×800 source → 480px wide):
+**Measured on this container**, on a real photograph — `public/images/car/frames/frame-30.jpg`, cover-cropped to 1200×800 at JPEG q90 (131,106 B) as the baseline, then re-encoded at 480px wide:
 
-| Encode | Bytes |
-|---|---|
-| source JPEG q90 | 5,893 |
-| WebP q72 effort 4 | **360** |
-| AVIF q50 | **303** |
-| mozjpeg q75 | 776 |
+| Encode | Bytes | vs baseline |
+|---|---|---|
+| source JPEG q90, 1200×800 | 131,106 | — |
+| 480px WebP q72 effort 4 | **14,920** | 11.4% |
+| 480px AVIF q50 | **11,283** | 8.6% |
+| 480px mozjpeg q75 | 19,124 | 14.6% |
 
-On a real 24-frame sequence at 480px the measured result was **5,232 KB PNG → 314 KB WebP q72**, about 13 KB/frame.
+Reproduce it. Note the explicit path into `work/tools` — `sharp` is deliberately **not** a
+dependency of the client project (§Stage 6 caveats), so a bare `require('sharp')` or
+`import 'sharp'` from the project root fails with `ERR_MODULE_NOT_FOUND`. Run
+`scripts/preflight.mjs` first; that is what puts it there.
+
+```bash
+node -e "
+const sharp = require('./work/tools/node_modules/sharp');
+(async () => {
+  const base = await sharp('public/images/car/frames/frame-30.jpg')
+    .resize(1200, 800, { fit: 'cover' }).jpeg({ quality: 90 }).toBuffer();
+  console.log('baseline', base.length);
+  for (const [l, f] of [['webp', p => p.webp({quality:72,effort:4})],
+                        ['avif', p => p.avif({quality:50})],
+                        ['moz',  p => p.jpeg({quality:75,mozjpeg:true})]])
+    console.log(l, (await f(sharp(base).resize(480)).toBuffer()).length);
+})();
+"
+```
+
+Ratios, not absolute bytes, are the transferable finding: **AVIF ≈ 0.75× WebP ≈ 0.59× mozjpeg** at visually comparable quality on photographic content. A flat or synthetic source will compress an order of magnitude smaller and tells you nothing about a real hero.
+
+And on a real sequence — the first 24 of this repo's 60 `public/images/car/frames/*.jpg`, PNG (lossless extraction) vs WebP q72 effort 4, measured just now:
+
+| Ladder width | PNG total | WebP q72 total | Per frame |
+|---|---|---|---|
+| 480 px | 2,519 KB | **158 KB** | 6.6 KB |
+| 720 px | 4,823 KB | **250 KB** | 10.4 KB |
+| 960 px | 7,524 KB | **334 KB** | 13.9 KB |
+
+```bash
+node -e "
+const sharp = require('./work/tools/node_modules/sharp'), fs = require('fs');
+(async () => {
+  const files = fs.readdirSync('public/images/car/frames').sort().slice(0, 24)
+    .map(f => 'public/images/car/frames/' + f);
+  for (const w of [480, 720, 960]) {
+    let png = 0, webp = 0;
+    for (const f of files) {
+      png  += (await sharp(f).resize(w).png().toBuffer()).length;
+      webp += (await sharp(f).resize(w).webp({ quality: 72, effort: 4 }).toBuffer()).length;
+    }
+    console.log(w, (png/1024).toFixed(0)+' KB PNG ->', (webp/1024).toFixed(0)+' KB WebP,',
+                (webp/24/1024).toFixed(1)+' KB/frame');
+  }
+})();
+"
+```
+
+**Per-frame cost scales with the ladder width you chose, not with the frame count** — which is why the width decision comes before the frame-count decision, and why `frames.mjs` caps width to the source and never upscales.
 
 **Caveats, verified:**
 
@@ -354,7 +419,7 @@ On a real 24-frame sequence at 480px the measured result was **5,232 KB PNG → 
 | **T2** | DebugBear / SpeedCurve free-then-paid tiers | free tier → ~$20+/mo | Yes | T1 gives up: continuous monitoring and alerting. Sell this to the client as a service or skip it. |
 | **T3** | Paid RUM (real-user monitoring) across the client's whole estate | $100+/mo | Yes | — |
 
-**The budgets this stage asserts** (from `i18n-seo.md` §5.6 and the skill's gates — reproduced here as *targets*, not as new doctrine):
+**The budgets this stage asserts.** These are *reproduced as targets, not authored here.* **`performance-a11y-gates.md` is the authority**: it carries the justification for every number and the gate ID (`JS-BUDGET`, `DECODED-MEMORY`, `LCP`, …) that `scripts/verify.mjs` actually implements. Field-metric definitions are `i18n-seo.md` §5.6. If a number below ever disagrees with `performance-a11y-gates.md`, that file wins and this table is stale.
 
 | Budget | Cap |
 |---|---|

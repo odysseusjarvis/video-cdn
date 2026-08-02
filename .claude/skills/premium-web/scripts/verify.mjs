@@ -600,10 +600,15 @@ async function checkVisualAndScrollCLS(browser, url, shotDir) {
   let smoothSeen = false;
   let hijackSeen = [];
   const runtimeErrors = [];
+  const externalFailures = [];   // cross-origin fetch failures — see the note at the aggregation below
+  let desktopBytes = 0;
+
+  const originOf = (u) => { try { return new URL(u).origin; } catch { return null; } };
+  const TARGET_ORIGIN = originOf(url);
 
   for (const vp of VIEWPORTS) {
     const ctx = await makeContext(browser, vp);
-    const { page, consoleErrors, pageErrors, badResponses } = await open(ctx, url);
+    const { page, consoleErrors, pageErrors, badResponses, bytes } = await open(ctx, url);
 
     // Everything up to here is the LOAD phase. Split it off before scrolling so we
     // can report load CLS and scroll CLS separately — they have different rules.
@@ -651,11 +656,28 @@ async function checkVisualAndScrollCLS(browser, url, shotDir) {
       };
     });
 
+    // The 1440 pass has already downloaded everything a desktop visitor gets, so the
+    // desktop payload budget costs nothing extra to assert. (BUDGET.pageBytesDesktop used
+    // to be declared, documented in performance-a11y-gates.md as a --budget knob, and then
+    // never read by anything — a budget that could not fail.)
+    if (vp.label === '1440') desktopBytes = [...bytes.values()].reduce((a, b) => a + b, 0);
+
     runtimeErrors.push(
       ...pageErrors.map((e) => `${vp.label}px pageerror: ${e}`),
-      ...consoleErrors.slice(0, 5).map((e) => `${vp.label}px console: ${e}`),
-      ...badResponses.slice(0, 8).map((e) => `${vp.label}px response ${e}`)
+      ...consoleErrors.slice(0, 5).map((e) => `${vp.label}px console: ${e}`)
     );
+    // Split same-origin from cross-origin. A same-origin 404 or aborted request is
+    // unambiguously the build's fault and blocks the ship. A cross-origin one is
+    // ambiguous FROM INSIDE THIS CONTAINER: egress goes through a proxy, so a blocked
+    // fonts.googleapis.com reads as net::ERR_CONNECTION_RESET and used to NO-SHIP a
+    // build whose only real crime is already caught, by name, by FONT-HOST. Report it
+    // loudly, do not let a sandbox network policy fail the gate.
+    for (const e of badResponses.slice(0, 12)) {
+      const u = (e.match(/https?:\/\/\S+/) || [])[0];
+      const o = u ? originOf(u) : null;
+      if (o && TARGET_ORIGIN && o !== TARGET_ORIGIN) externalFailures.push(`${vp.label}px ${e}`);
+      else runtimeErrors.push(`${vp.label}px response ${e}`);
+    }
 
     await ctx.close();
   }
@@ -709,9 +731,27 @@ async function checkVisualAndScrollCLS(browser, url, shotDir) {
   }
 
   if (runtimeErrors.length) {
-    fail('RUNTIME', `${runtimeErrors.length} runtime errors / failed responses`, runtimeErrors);
+    fail('RUNTIME', `${runtimeErrors.length} same-origin runtime errors / failed responses`, runtimeErrors);
   } else {
-    pass('RUNTIME', 'no page errors, no console errors, no 4xx/5xx responses');
+    pass('RUNTIME', 'no page errors, no console errors, no same-origin 4xx/5xx responses');
+  }
+
+  if (externalFailures.length) {
+    warn('THIRD-PARTY-REQUESTS', `${[...new Set(externalFailures.map((e) => e.replace(/^\d+px /, '')))].length} cross-origin request(s) failed`, [
+      ...new Set(externalFailures),
+      'These are NOT counted as ship-blockers, because from inside this container every cross-origin request goes through an egress proxy and a blocked host is indistinguishable from a dead one.',
+      'They are still a finding: a third-party host in the critical path is a dependency the client cannot fix. Self-host it (FONT-HOST says the same thing about stylesheets, by name).',
+      'To judge them properly, re-run this from a network that can reach the host, or open the page yourself.',
+    ]);
+  }
+
+  if (desktopBytes > BUDGET.pageBytesDesktop) {
+    fail('PAGE-PAYLOAD-DESKTOP', `${mb(desktopBytes)} transferred at 1440px after a full scroll > ${mb(BUDGET.pageBytesDesktop)}`, [
+      'Desktop gets the full-width ladder, so this is where an over-wide frame sequence shows up.',
+      'Override deliberately with --budget pageBytesDesktop=<bytes> if you have a stated reason.',
+    ]);
+  } else {
+    pass('PAGE-PAYLOAD-DESKTOP', `${mb(desktopBytes)} at 1440px after a full scroll ≤ ${mb(BUDGET.pageBytesDesktop)}`);
   }
 
   return baseline;
@@ -958,6 +998,51 @@ async function checkPerformance(browser, url) {
   await page.waitForTimeout(1200); // let a late LCP candidate land
 
   const tele = await readTelemetry(page);
+
+  // The skill's own rule is that frame 0 ships as a real <img fetchpriority="high"> and IS
+  // the LCP element. Nothing verified that it actually won. The usual way it loses is an
+  // entrance animation starting at opacity:0 — an element that has never been painted at
+  // non-zero opacity is not an LCP candidate at all, so the hero silently hands LCP to a
+  // paragraph and POSTER-BYTES then has nothing to weigh.
+  const heroImg = await page.evaluate(() => {
+    const cands = [...document.images].filter((i) => {
+      const r = i.getBoundingClientRect();
+      return r.width > 200 && r.height > 150 && r.top < window.innerHeight;
+    });
+    if (!cands.length) return null;
+    const best = cands.sort((a, b) => {
+      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+      return rb.width * rb.height - ra.width * ra.height;
+    })[0];
+    const cs = getComputedStyle(best);
+    // Does the element START hidden? That is the disqualifier — a CSS animation whose
+    // 0% keyframe is opacity:0, or an inline/base opacity below 1 right now.
+    let startsHidden = parseFloat(cs.opacity) < 0.99;
+    if (!startsHidden && cs.animationName !== 'none') {
+      for (const sheet of document.styleSheets) {
+        let rules; try { rules = sheet.cssRules; } catch (_) { continue; }
+        for (const rule of rules || []) {
+          if (rule.type !== CSSRule.KEYFRAMES_RULE) continue;
+          if (!cs.animationName.split(',').map((s) => s.trim()).includes(rule.name)) continue;
+          for (const kf of rule.cssRules || []) {
+            const isStart = /(^|,)\s*(0%|from)\s*$/.test(kf.keyText || '');
+            if (isStart && parseFloat(kf.style.opacity || '1') < 0.99) startsHidden = true;
+          }
+        }
+      }
+    }
+    return {
+      url: best.currentSrc || best.src || '',
+      src: (best.currentSrc || best.src || '').split('/').pop().split('?')[0],
+      w: Math.round(best.getBoundingClientRect().width),
+      h: Math.round(best.getBoundingClientRect().height),
+      fetchpriority: best.getAttribute('fetchpriority') || '(unset)',
+      startsHidden,
+      opacity: cs.opacity,
+      animationName: cs.animationName,
+    };
+  });
+
   const timing = await page.evaluate(() => {
     const nav = performance.getEntriesByType('navigation')[0] || {};
     return {
@@ -1027,20 +1112,55 @@ async function checkPerformance(browser, url) {
   /* --- the poster on its own ---
      The LCP image is the one file that must arrive before anything else is
      allowed to matter. Budget it separately from the rest of the hero payload. */
-  if (tele.lcp && tele.lcp.url) {
-    const posterBytes = sizeOf(tele.lcp.url);
-    const rel = tele.lcp.url.replace(/^https?:\/\/[^/]+/, '');
+  /* Weigh the hero image whether or not it happened to WIN largest-contentful-paint.
+     A text-heavy page can legitimately have a <p> as its LCP element while still shipping
+     a real poster that must arrive first — failing that build would be wrong. So: budget
+     the LCP image when there is one, otherwise budget the largest above-the-fold <img>,
+     and say which of the two was weighed. */
+  const weighUrl = (tele.lcp && tele.lcp.url) || (heroImg && heroImg.url) || null;
+  const weighIsLcp = Boolean(tele.lcp && tele.lcp.url);
+  if (weighUrl) {
+    const posterBytes = sizeOf(weighUrl);
+    const rel = weighUrl.replace(/^https?:\/\/[^/]+/, '');
+    const what = weighIsLcp ? 'the LCP image' : `the largest above-the-fold <img> (${heroImg.w}×${heroImg.h}, fetchpriority=${heroImg.fetchpriority})`;
+    const detail = [rel];
+    if (!weighIsLcp) {
+      detail.push(`Not the LCP element — LCP went to ${tele.lcp ? `${tele.lcp.el} (${tele.lcp.tag || 'text'})` : 'nothing at all'}. Weighed anyway: it is still the file that has to arrive before the hero exists.`);
+    }
+    if (!posterBytes) detail.push('WARNING: 0 transferred bytes recorded for this URL — it was served from cache or the response was not attributed. Treat this number as unproven.');
     if (posterBytes > BUDGET.posterBytes) {
-      fail('POSTER-BYTES', `the LCP image is ${kb(posterBytes)} > ${kb(BUDGET.posterBytes)}`, [
-        rel,
+      fail('POSTER-BYTES', `${what} is ${kb(posterBytes)} > ${kb(BUDGET.posterBytes)}`, detail.concat([
         'Re-encode at the real display width: AVIF q50 or JPEG q75. A 1600px-wide poster on a 375px phone is three quarters wasted.',
         'Ship it as <img fetchpriority="high" loading="eager" decoding="async"> with explicit width/height, and preload it from index.html on a client-rendered build.',
-      ]);
+      ]));
     } else {
-      pass('POSTER-BYTES', `the LCP image is ${kb(posterBytes)} ≤ ${kb(BUDGET.posterBytes)}`, [rel]);
+      pass('POSTER-BYTES', `${what} is ${kb(posterBytes)} ≤ ${kb(BUDGET.posterBytes)}`, detail);
     }
   } else {
-    skip('POSTER-BYTES', 'no image LCP candidate — nothing to weigh');
+    skip('POSTER-BYTES', 'no image LCP candidate and no above-the-fold <img> — nothing to weigh');
+  }
+
+  /* The hero being DISQUALIFIED from LCP by its own entrance animation is a separate,
+     genuinely fixable defect — and an easy one to ship without noticing, because the page
+     looks perfect. An element whose animation starts at opacity:0 has not painted, so it is
+     not an LCP candidate at all: the poster you optimised hands LCP to a paragraph and your
+     real hero timing is invisible. Losing to text on a text-heavy page is fine; starting
+     hidden is not. (The transform/opacity rule elsewhere in this skill is about the
+     COMPOSITOR — this is the one place where animating opacity has a cost beyond it.) */
+  if (heroImg && !weighIsLcp && heroImg.startsHidden) {
+    fail('HERO-LCP-CANDIDATE', 'the hero <img> starts at opacity:0, so it is not an LCP candidate', [
+      `${heroImg.src} — animation-name: ${heroImg.animationName}, computed opacity now: ${heroImg.opacity}`,
+      `LCP went to ${tele.lcp ? tele.lcp.el : 'nothing at all'} instead.`,
+      'Fix: move the reveal to a WRAPPER element and leave the <img> itself at opacity:1, or animate transform only.',
+      'The skill\'s own rule is that frame 0 / the poster ships as a real <img fetchpriority="high"> and IS the LCP element — that is what makes the LCP number mean anything.',
+    ]);
+  } else if (heroImg && !weighIsLcp) {
+    warn('HERO-LCP-CANDIDATE', 'the hero <img> is a valid LCP candidate but lost to a larger text block', [
+      `${heroImg.src} at ${heroImg.w}×${heroImg.h}; LCP went to ${tele.lcp ? tele.lcp.el : '(none)'}.`,
+      'Legitimate on a text-heavy page. Only act on this if the image was meant to be the dominant first impression, in which case it is too small at 375px.',
+    ]);
+  } else if (heroImg) {
+    pass('HERO-LCP-CANDIDATE', 'the hero <img> is the LCP element, as intended');
   }
 
   /* --- hero payload --- */
@@ -1241,6 +1361,7 @@ async function checkContent(browser, origin, routes) {
   const internalLinkFails = [];
   const info = [];
   const allInternalHrefs = new Set();
+  const allExternalHrefs = new Set();
 
   for (const route of routes) {
     const url = new URL(route, origin).href;
@@ -1381,6 +1502,8 @@ async function checkContent(browser, origin, routes) {
         // hash targets are resolved in-page below
       } else if (l.resolved.startsWith(origin)) {
         allInternalHrefs.add(l.resolved);
+      } else if (/^https?:\/\//i.test(l.resolved)) {
+        allExternalHrefs.add(l.resolved);
       }
     }
 
@@ -1412,6 +1535,45 @@ async function checkContent(browser, origin, routes) {
     } catch (e) {
       internalLinkFails.push(`internal link ${p} → unreachable (${e.message})`);
     }
+  }
+
+  /* ---- external links, opt-in ----
+     --check-external used to be parsed and then never read: a documented flag that did
+     nothing, and a header comment describing behaviour that did not exist. It is real now.
+     Findings are WARN, never FAIL: egress here goes through a proxy, so a reachable host
+     can still look dead from inside this container. A 404 from a host that DID answer is
+     the useful signal — that is the client's own Facebook page or supplier link rotting. */
+  const externalNotes = [];
+  if (ARGS.checkExternal) {
+    const targets = [...allExternalHrefs].slice(0, 40);
+    let reached = 0;
+    for (const href of targets) {
+      try {
+        const ac = new AbortController();
+        const t = setTimeout(() => ac.abort(), 12000);
+        let res;
+        try {
+          res = await fetch(href, { method: 'HEAD', redirect: 'follow', signal: ac.signal });
+          if (res.status === 405 || res.status === 501) res = await fetch(href, { method: 'GET', redirect: 'follow', signal: ac.signal });
+        } finally { clearTimeout(t); }
+        reached++;
+        if (res.status >= 400) externalNotes.push(`HTTP ${res.status} → ${href}`);
+      } catch (e) {
+        externalNotes.push(`unreachable from this container (${String(e.message).split('\n')[0]}) → ${href}`);
+      }
+    }
+    if (externalNotes.length) {
+      warn('EXTERNAL-LINKS', `${externalNotes.length} of ${targets.length} external links did not resolve cleanly`, externalNotes.concat([
+        `${reached}/${targets.length} hosts answered at all, so the proxy is ${reached ? 'working' : 'likely blocking everything — treat this entire check as inconclusive'}.`,
+        'A 4xx from a host that answered is a real dead link on the client\'s site. A network error is not evidence of anything from in here — confirm from a normal network before telling the client.',
+      ]));
+    } else if (targets.length) {
+      pass('EXTERNAL-LINKS', `all ${targets.length} external links resolve`);
+    } else {
+      skip('EXTERNAL-LINKS', 'no external links on the crawled routes');
+    }
+  } else {
+    skip('EXTERNAL-LINKS', `${allExternalHrefs.size} external link(s) found and NOT checked — pass --check-external to HEAD them`);
   }
 
   await ctx.close();
