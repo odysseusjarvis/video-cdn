@@ -35,6 +35,12 @@ Run **§7 before you tell the user the site is done.** It is pass/fail, not vibe
 | `LocalBusiness` required properties are only `name` + `address`; everything else is recommended | Current (Search Central local-business) | Everything in §3.4 beyond those two is us being better than required |
 | Astro `i18n` config: `locales`, `defaultLocale`, `routing.prefixDefaultLocale`, `routing.fallbackType`, `fallback`; helpers `getRelativeLocaleUrl` / `getAbsoluteLocaleUrl` / `getLocaleByPath`; `Astro.currentLocale` | Current (docs.astro.build) | §1.8 code is the current API, not the old `astro-i18next` era |
 | Google Fonts' `latin` subset **does not contain č ć ž š đ** (they live in Latin Extended-A, U+0100–017F) | Verifiable in any font's `unicode-range` | §2.5 — the single most common way a BiH site ships broken |
+| `text-wrap` (`balance`) | Baseline **Newly available, March 2024** — *not* "widely available" | §2.4 — safe to use unprefixed (it degrades to normal wrapping), but do not describe it to anyone as universally supported |
+| `text-wrap-style` (`pretty`) | Baseline **Newly available, October 2024** | Same — pure enhancement, no fallback needed, but not a guarantee |
+| `hyphenate-limit-chars` | **Limited availability — not Baseline** (missing in Safari) | §2.4 — `hyphens: auto` does the work; the limit property only tunes it where supported |
+| `animation-timeline` / `scroll()` / `view()` | **Limited availability — not Baseline** | Scroll-driven CSS is an enhancement over a JS path, never the only path. See `scroll-effects.md`; §5.6 states the INP caveat |
+
+**Rule for every "modern CSS" line in this file:** if it is not Baseline Widely available, it must either degrade to something acceptable on its own or sit behind `@supports`. Both cases are marked at the point of use.
 
 ---
 
@@ -242,7 +248,10 @@ done
 ```
 
 ```css
-/* Language switcher — no JS, no dropdown, no layout shift. */
+/* Language switcher — no JS, no dropdown, no layout shift.
+   Touch: WCAG 2.2 SC 2.5.8 requires a 24×24 CSS-px minimum target; 44×44 is the comfortable
+   figure. A 13px "BS" label is ~22×16 — nowhere near either. The target is enlarged with an
+   ::before overlay rather than padding, so the header height does not change. */
 .lang__list {
   display: flex;
   align-items: center;
@@ -251,35 +260,50 @@ done
   list-style: none;
 }
 .lang__item {
-  display: inline-block;
-  padding-block: 0.35em;                 /* generous tap target without changing layout height */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 2.75rem;              /* 44px — the visible box may be smaller, the hit box is not */
+  min-block-size: 2.75rem;
   font-size: 0.8125rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-decoration: none;
   color: var(--c-ink-60, #6b6b6b);
   transition: color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;            /* kills the 300ms tap delay on older mobile Safari */
+}
+/* If the header is too tight for 44px rows, shrink the *visual* row but keep the hit box:
+   .lang__item { min-block-size: 1.5rem; }  +  the ::before overlay below.                     */
+.lang__item::before {                     /* invisible hit-area extension — never affects layout */
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto 0;
+  block-size: 2.75rem;
+  translate: 0 -50%;
 }
 .lang__item:hover,
 .lang__item:focus-visible { color: var(--c-ink, #111); }
 .lang__item--current { color: var(--c-ink, #111); }
+.lang__item:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
-/* Separator drawn with a pseudo-element so the DOM stays clean. */
+/* Separator drawn on the list item, not inside the link, so it stays outside the hit box. */
+.lang__list > li + li { position: relative; padding-inline-start: var(--space-2xs, 0.75rem); }
 .lang__list > li + li::before {
   content: "";
-  display: inline-block;
+  position: absolute; inset-inline-start: 0; top: 50%;
   inline-size: 1px; block-size: 0.75em;
-  margin-inline-end: var(--space-2xs, 0.75rem);
-  vertical-align: -0.05em;
+  translate: 0 -50%;
   background: currentColor;
   opacity: 0.25;
 }
 
 /* Underline grows from the centre — transform only, no layout work. */
-.lang__item { position: relative; }
 .lang__item::after {
   content: "";
-  position: absolute; inset-inline: 0; bottom: 0.1em;
+  position: absolute; inset-inline: 0; bottom: 0.6rem;
   block-size: 1px;
   background: currentColor;
   transform: scaleX(0);
@@ -290,6 +314,13 @@ done
 .lang__item:focus-visible::after,
 .lang__item--current::after { transform: scaleX(1); }
 
+/* Touch devices have no hover state — the underline must not depend on one.
+   :hover on a coarse pointer either never fires or sticks after a tap. */
+@media (hover: none) {
+  .lang__item::after { transform: scaleX(0); }
+  .lang__item--current::after { transform: scaleX(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lang__item, .lang__item::after { transition: none; }   /* state still changes, just instantly */
 }
@@ -297,46 +328,85 @@ done
 
 **Never auto-redirect on `Accept-Language`.** It hides two thirds of your site from Googlebot (which crawls from one locale), traps a Bosnian speaker in Germany on the German site, and breaks shared links. Offer, don't impose:
 
+**The banner must not be in the document flow.** An in-flow banner has two bad options: reserve its height on every page forever (dead space on ~95% of visits, since most visitors already match), or insert it after load and shift the whole page down (CLS). A fixed-position toast at the bottom of the viewport does neither — it costs zero layout, zero CLS, and on a phone it sits where the thumb is.
+
 ```html
-<!-- Placed as the FIRST child of <body>. min-block-size is reserved so showing it causes zero CLS. -->
+<!-- Last child of <body>, immediately before the scripts. Out of flow → no reserved height, no CLS. -->
 <aside id="lang-hint" class="lang-hint" hidden aria-live="polite">
   <p class="lang-hint__text"></p>
   <a class="lang-hint__go" href="#"></a>
-  <button class="lang-hint__close" type="button" aria-label="Close">×</button>
+  <button class="lang-hint__close" type="button" aria-label="Close">
+    <span aria-hidden="true">×</span>
+  </button>
 </aside>
 ```
 
 ```css
+/* CRITICAL: [hidden] is a UA rule, and ANY author `display` declaration beats it — author origin
+   wins over UA origin regardless of specificity. `.lang-hint { display: flex }` alone would make
+   the "hidden" banner permanently visible in layout, with its link and close button in the tab
+   order. This rule is what makes `el.hidden = true` actually work. Never omit it. */
+.lang-hint[hidden] { display: none; }
+
 .lang-hint {
-  min-block-size: 3rem;                /* reserved BEFORE it is shown → CLS stays 0 */
-  display: flex; align-items: center; gap: 1rem;
-  padding-inline: var(--space-s, 1rem);
+  position: fixed;
+  inset-block-end: 0; inset-inline: 0;
+  z-index: 50;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: 0.75rem var(--space-s, 1rem);
+  /* Keeps the toast clear of the iOS home indicator and Android gesture bar. */
+  padding-block-end: calc(0.75rem + env(safe-area-inset-bottom, 0px));
   background: var(--c-surface-2, #f4f2ee);
+  border-block-start: 1px solid rgb(0 0 0 / 0.08);
   opacity: 0;
-  transform: translateY(-0.5rem);
+  transform: translateY(100%);          /* off-screen, not merely transparent — nothing to tab into visually */
   transition: opacity 260ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .lang-hint[data-shown] { opacity: 1; transform: none; }
+
+.lang-hint__go { font-weight: 600; }
+.lang-hint__go,
+.lang-hint__close {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-inline-size: 2.75rem; min-block-size: 2.75rem;   /* 44px — real touch targets, not 16px glyphs */
+  touch-action: manipulation;
+}
+.lang-hint__close {
+  margin-inline-start: auto;
+  font-size: 1.5rem; line-height: 1;
+  background: none; border: 0; cursor: pointer; color: inherit;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .lang-hint { transition: none; transform: none; }
+  .lang-hint { transition: none; transform: none; }   /* appears instantly, still appears */
 }
 ```
 
 ```js
-// lang-hint.js — ~20 lines, no dependency. Suggests a language, never forces one.
+// lang-hint.js — no dependency. Suggests a language, never forces one.
 // ALTERNATES is injected per page by the build from routes.js.
 (function () {
   const ALTERNATES = window.__ALTERNATES__;            // { bs:'/bs/usluge/', en:'/en/services/', de:'/de/leistungen/' }
-  const CURRENT    = document.documentElement.lang;    // 'bs' | 'en' | 'de'
-  const KEY        = 'lang-pref';
+  const el = document.getElementById('lang-hint');
+  if (!el || !ALTERNATES) return;                       // build regression → stay silent, never throw
+  const CURRENT = document.documentElement.lang;        // 'bs' | 'en' | 'de'
+  const KEY     = 'lang-pref';
+
+  // localStorage throws (not returns null) in Safari private mode and wherever storage is blocked.
+  // An uncaught throw here would also skip every listener below it.
+  const store = {
+    get(k)    { try { return localStorage.getItem(k); }   catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); }       catch { /* ignore */ } },
+  };
 
   // Respect an explicit earlier choice, and never nag twice.
-  if (localStorage.getItem(KEY)) return;
+  if (store.get(KEY)) return;
 
   // First matching browser language that we actually publish.
+  // Object.hasOwn, not `in` — `in` would also match inherited keys like "constructor".
   const wanted = (navigator.languages || [navigator.language || ''])
     .map((l) => l.slice(0, 2).toLowerCase())
-    .find((l) => l in ALTERNATES);
+    .find((l) => Object.hasOwn(ALTERNATES, l));
 
   if (!wanted || wanted === CURRENT) return;
 
@@ -346,21 +416,23 @@ done
     de: ['Diese Seite gibt es auch auf Deutsch.',    'Auf Deutsch ansehen'],
   };
 
-  const el = document.getElementById('lang-hint');
-  el.querySelector('.lang-hint__text').textContent = COPY[wanted][0];
-  const go = el.querySelector('.lang-hint__go');
+  const text = el.querySelector('.lang-hint__text');
+  const go   = el.querySelector('.lang-hint__go');
+  text.textContent = COPY[wanted][0];
+  text.setAttribute('lang', wanted);
   go.textContent = COPY[wanted][1];
   go.href = ALTERNATES[wanted];
   go.setAttribute('hreflang', wanted);
   go.setAttribute('lang', wanted);
-  el.querySelector('.lang-hint__text').setAttribute('lang', wanted);
 
   el.hidden = false;
-  requestAnimationFrame(() => el.setAttribute('data-shown', ''));
+  // Double rAF: one frame for the display:none→flex recalc, one for the transition to have a
+  // start value. A single rAF drops the transition in Chrome often enough to notice.
+  requestAnimationFrame(() => requestAnimationFrame(() => el.setAttribute('data-shown', '')));
 
-  go.addEventListener('click', () => localStorage.setItem(KEY, wanted));
+  go.addEventListener('click', () => store.set(KEY, wanted));
   el.querySelector('.lang-hint__close').addEventListener('click', () => {
-    localStorage.setItem(KEY, CURRENT);
+    store.set(KEY, CURRENT);
     el.hidden = true;
   });
 })();
@@ -386,8 +458,11 @@ content/
     about.json
     contact.json
     images.json            # alt text, keyed by image id — see §5.5
-  en/  (same six files, same keys)
-  de/  (same six files, same keys)
+  en/  (same seven files, same keys)
+  de/  (same seven files, same keys)
+  jsonld/                  # per-page @graph, one file per route key per locale (§3.3)
+    home.bs.json  home.en.json  home.de.json
+    services.bs.json  …
 ```
 
 `content/bs/home.json` — flat, self-describing keys, no HTML in values except `<strong>`/`<em>`. **No comments: JSON does not allow them and the build will throw.**
@@ -396,6 +471,7 @@ content/
 {
   "meta.title":        "Stolarija po mjeri — Tuzla | Stolarija Vrelo",
   "meta.description":  "Kuhinje, stepenice i namještaj po mjeri od masivnog drveta. Vlastita radionica u Tuzli, 18 godina iskustva, izrada 3–6 sedmica.",
+  "meta.ogImageAlt":   "Kuhinja od masivnog hrasta u radionici u Tuzli",
   "hero.eyebrow":      "Radionica u Tuzli od 2007.",
   "hero.title":        "Namještaj koji nadživi kuću",
   "hero.lead":         "Kuhinje, stepenice i ugradni ormari od masivnog hrasta i bukve. Mjerenje, izrada i montaža — jedna ekipa, jedna odgovornost.",
@@ -414,6 +490,7 @@ content/
 {
   "meta.title":        "Massivholz nach Maß aus Bosnien | Tischlerei Vrelo",
   "meta.description":  "Küchen, Treppen und Einbauschränke aus Massivholz. Eigene Werkstatt in Tuzla, 18 Jahre Erfahrung, Lieferung nach DE/AT in 4–7 Wochen.",
+  "meta.ogImageAlt":   "Massivholzküche aus Eiche in der Werkstatt in Tuzla",
   "hero.eyebrow":      "Werkstatt in Tuzla seit 2007",
   "hero.title":        "Massivholz, das bleibt",
   "hero.lead":         "Küchen, Treppen und Einbauschränke aus Eiche und Buche. Aufmaß, Fertigung und Montage aus einer Hand.",
@@ -445,41 +522,58 @@ import { join } from 'node:path';
 const ROOT = 'content';
 const LOCALES = ['bs', 'en', 'de'];
 const BASE = 'bs';                       // the locale that defines the key set
-// Values legitimately identical across languages (names, numbers, emails, symbols):
-const ALLOW_IDENTICAL = /^[\d\s+.,–—%€$/()-]*$|@|^https?:|^Vrelo/i;
+// Proper nouns that are correctly identical in all three languages. EDIT THIS PER PROJECT —
+// leaving another client's brand name here is how a real untranslated string slips through.
+const BRAND = ['Vrelo', 'Stolarija Vrelo d.o.o.'];
+// Values legitimately identical across languages: pure numbers/symbols, emails, URLs, brand.
+const isAllowedIdentical = (v) =>
+  /^[\d\s+.,–—%€$/()-]*$/.test(v) ||     // "640+", "18", "3–6", "1.800"
+  /^[^\s@]+@[^\s@]+$/.test(v) ||         // an email address, and nothing else
+  /^https?:\/\//.test(v) ||
+  BRAND.includes(v.trim());
 
 let errors = 0;
 const fail = (msg) => { console.error('✗ ' + msg); errors++; };
 
 const load = (loc, file) => JSON.parse(readFileSync(join(ROOT, loc, file), 'utf8'));
+// tryLoad returns null instead of throwing, so ONE missing or malformed file produces a clean
+// report of every other problem rather than a stack trace on line 1.
+const tryLoad = (loc, file) => {
+  try { return load(loc, file); }
+  catch (e) { fail(`${loc}/${file}: ${e.code === 'ENOENT' ? 'missing entirely' : 'invalid JSON — ' + e.message}`); return null; }
+};
+
 const files = readdirSync(join(ROOT, BASE)).filter((f) => f.endsWith('.json'));
+if (!files.length) fail(`no JSON files found in ${ROOT}/${BASE}/ — wrong working directory?`);
 
 for (const file of files) {
-  const base = load(BASE, file);
+  const base = tryLoad(BASE, file);
+  if (!base) continue;
+
   for (const loc of LOCALES.filter((l) => l !== BASE)) {
-    let other;
-    try { other = load(loc, file); } catch { fail(`${loc}/${file} is missing entirely`); continue; }
+    const other = tryLoad(loc, file);
+    if (!other) continue;
 
     for (const k of Object.keys(base)) {
-      if (!(k in other))            fail(`${loc}/${file}: missing key "${k}"`);
-      else if (!String(other[k]).trim()) fail(`${loc}/${file}: empty value for "${k}"`);
-      else if (other[k] === base[k] && !ALLOW_IDENTICAL.test(other[k]))
-                                    fail(`${loc}/${file}: "${k}" is identical to ${BASE} — untranslated?`);
+      if (!Object.hasOwn(other, k))       fail(`${loc}/${file}: missing key "${k}"`);
+      else if (!String(other[k]).trim())  fail(`${loc}/${file}: empty value for "${k}"`);
+      else if (other[k] === base[k] && !isAllowedIdentical(String(other[k])))
+                                          fail(`${loc}/${file}: "${k}" is identical to ${BASE} — untranslated?`);
     }
     for (const k of Object.keys(other)) {
-      if (!(k in base))             fail(`${loc}/${file}: extra key "${k}" not present in ${BASE}`);
+      if (!Object.hasOwn(base, k))        fail(`${loc}/${file}: extra key "${k}" not present in ${BASE}`);
     }
-  }
-}
 
-// Length guard: German that is >45% longer than Bosnian will break a button or a heading. See §2.4.
-for (const file of files) {
-  const bs = load('bs', file), de = load('de', file);
-  for (const k of Object.keys(bs)) {
-    if (!de[k] || k.startsWith('meta.')) continue;
-    const ratio = de[k].length / Math.max(bs[k].length, 1);
-    if (bs[k].length > 8 && ratio > 1.45)
-      console.warn(`⚠ de/${file}: "${k}" is ${Math.round((ratio - 1) * 100)}% longer than bs — check layout`);
+    // Length guard, in the same pass so it can never run on a file that failed to load.
+    // German >45% longer than Bosnian will break a button or a heading. See §2.4.
+    if (loc === 'de') {
+      for (const k of Object.keys(base)) {
+        if (!other[k] || k.startsWith('meta.')) continue;
+        const a = String(base[k]).length, b = String(other[k]).length;
+        if (a > 8 && b / a > 1.45)
+          console.warn(`⚠ de/${file}: "${k}" is ${Math.round((b / a - 1) * 100)}% longer than bs — check layout at 320px`);
+      }
+    }
   }
 }
 
@@ -530,20 +624,26 @@ build.mjs
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="theme-color" content="#111111">
 <link rel="stylesheet" href="/assets/site.css">
 <script type="application/ld+json">{{jsonld}}</script>
 </head>
 <body>
 <a class="skip" href="#main">{{skipToContent}}</a>   <!-- key lives in content/{locale}/common.json -->
-{{langHint}}
 <header class="site-header">{{nav}}{{switcher}}</header>
 <main id="main">{{body}}</main>
 <footer class="site-footer">{{footer}}</footer>
+{{langHint}}                                          <!-- fixed toast, out of flow: must be LAST, not first -->
 <script>window.__ALTERNATES__ = {{alternatesJson}};</script>
 <script src="/assets/lang-hint.js" defer></script>
 </body>
 </html>
 ```
+
+> `{{jsonld}}` and `{{alternatesJson}}` are the only two tokens whose value is **not** HTML-escaped — one is a JSON-LD document, the other a JSON literal inside `<script>`. Everything else goes through `esc()` below. Getting this backwards either double-escapes your structured data or lets a stray `"` in a client's description break every meta tag after it.
 
 ```js
 // build.mjs — reads content/, writes dist/{bs,en,de}/…/index.html. No dependencies.
@@ -553,19 +653,42 @@ import { LOCALES, DEFAULT_LOCALE, ROUTES, SITE, url } from './content/routes.js'
 
 const OG_LOCALE = { bs: 'bs_BA', en: 'en_US', de: 'de_DE' };
 const PAGES = [                                  // routeKey → template + content file
-  { key: 'home',     tpl: 'home.html',     data: 'home.json'     },
-  { key: 'services', tpl: 'services.html', data: 'services.json' },
-  { key: 'work',     tpl: 'work.html',     data: 'work.json'     },
-  { key: 'about',    tpl: 'about.html',    data: 'about.json'    },
-  { key: 'contact',  tpl: 'contact.html',  data: 'contact.json'  },
+  { key: 'home',               tpl: 'home.html',     data: 'home.json'     },
+  { key: 'services',           tpl: 'services.html', data: 'services.json' },
+  { key: 'work',               tpl: 'work.html',     data: 'work.json'     },
+  { key: 'about',              tpl: 'about.html',    data: 'about.json'    },
+  { key: 'contact',            tpl: 'contact.html',  data: 'contact.json'  },
+  { key: 'services/kitchens',  tpl: 'service-detail.html', data: 'services-kitchens.json' },
+  { key: 'services/stairs',    tpl: 'service-detail.html', data: 'services-stairs.json'   },
 ];
+
+// HARD GUARD: tools/sitemap.mjs iterates ROUTES, build.mjs iterates PAGES. If they ever diverge
+// the sitemap advertises URLs that were never built — 404s in Search Console, and a direct
+// violation of the §5.1 rule "never list a URL that is noindexed, redirected or 404".
+{
+  const built = new Set(PAGES.map((p) => p.key));
+  const missing = Object.keys(ROUTES).filter((k) => !built.has(k));
+  if (missing.length) throw new Error(`ROUTES has keys with no PAGES entry: ${missing.join(', ')}`);
+}
 
 const read  = (p) => readFileSync(p, 'utf8');
 const json  = (p) => JSON.parse(read(p));
-/** Replace {{key}} tokens. Unknown tokens throw — a silent {{typo}} shipping to production is worse. */
-const fill  = (tpl, vars) => tpl.replace(/\{\{([\w.]+)\}\}/g, (_, k) => {
-  if (!(k in vars)) throw new Error(`Missing token {{${k}}}`);
-  return vars[k];
+
+/** HTML-escape. Every content value lands in an attribute or in text; neither is safe raw.
+    A single " in a client's meta.description silently truncates the tag and everything after it. */
+const esc = (s) => String(s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+/** Values that are already markup and must NOT be escaped again. */
+const RAW = new Set(['hreflang', 'switcher', 'nav', 'footer', 'body', 'langHint',
+                     'jsonld', 'alternatesJson', 'ogLocaleAlternates']);
+
+/** Replace {{key}} tokens. Unknown tokens throw — a silent {{typo}} shipping to production is worse.
+    The replacement is a FUNCTION, so `$&`/`$1` inside a value are never reinterpreted. */
+const fill = (tpl, vars) => tpl.replace(/\{\{([\w.]+)\}\}/g, (_, k) => {
+  if (!Object.hasOwn(vars, k)) throw new Error(`Missing token {{${k}}}`);
+  return RAW.has(k) ? vars[k] : esc(vars[k]);
 });
 
 const base = read('templates/base.html');
@@ -616,20 +739,31 @@ for (const locale of LOCALES) {
 cpSync('public', 'dist', { recursive: true });
 
 function renderNav(locale, c) {
-  return `<nav aria-label="${c['nav.label']}"><ul>` +
+  return `<nav aria-label="${esc(c['nav.label'])}"><ul>` +
     ['home', 'services', 'work', 'about', 'contact'].map((k) =>
-      `<li><a href="${new URL(url(k, locale)).pathname}">${c['nav.' + k]}</a></li>`).join('') +
+      `<li><a href="${new URL(url(k, locale)).pathname}">${esc(c['nav.' + k])}</a></li>`).join('') +
     `</ul></nav>`;
 }
 function renderFooter(locale, c) {
   const nap = json('content/nap.json');            // §6 — one source, never retyped
-  return `<address>
-    <span>${nap.name}</span>
-    <span>${nap.street}, ${nap.postalCode} ${nap.city}</span>
-    <a href="tel:${nap.phoneE164}">${nap.phoneDisplay}</a>
-    <a href="mailto:${nap.email}">${nap.email}</a>
-  </address><p>${c['footer.rights']}</p>`;
+  return `<address class="nap">
+    <strong class="nap__name">${esc(nap.name)}</strong>
+    <span class="nap__street">${esc(nap.street)}</span>
+    <span class="nap__city">${esc(nap.postalCode)} ${esc(nap.city)}</span>
+    <a class="nap__phone" href="tel:${esc(nap.phoneE164)}">${esc(nap.phoneDisplay)}</a>
+    <a class="nap__mail" href="mailto:${esc(nap.email)}">${esc(nap.email)}</a>
+  </address><p>${esc(c['footer.rights'])}</p>`;
 }
+```
+
+**Run order matters.** `sitemap.mjs` writes into `dist/`, so it must run *after* `build.mjs` has created it:
+
+```json
+{ "scripts": {
+    "check:i18n": "node tools/check-i18n.mjs",
+    "prebuild":   "npm run check:i18n",
+    "build":      "node build.mjs && node tools/sitemap.mjs && node tools/og/build-og.mjs"
+} }
 ```
 
 ### 1.9 Approach B — Astro i18n (current API, 2026-08)
@@ -648,10 +782,9 @@ export default defineConfig({
     defaultLocale: 'bs',
     routing: {
       prefixDefaultLocale: true,      // → /bs/, /en/, /de/ — symmetric, matches §1.1
-      redirectToDefaultLocale: true,  // / → /bs/
-      fallbackType: 'redirect',       // a missing /de/ page redirects rather than silently showing bs
+      redirectToDefaultLocale: true,  // / → /bs/  (valid only together with prefixDefaultLocale: true)
     },
-    fallback: { de: 'en', en: 'bs' }, // only fires for pages that genuinely don't exist yet
+    // NO `fallback`. Deliberately. See the note below — this is not an oversight.
   },
   integrations: [
     sitemap({
@@ -660,6 +793,23 @@ export default defineConfig({
   ],
 });
 ```
+
+> **Why `fallback` is omitted, and why you should resist adding it.** Astro's `i18n.fallback`
+> maps a locale to another locale for pages that do not exist. With the default
+> `fallbackType: 'redirect'`, `/de/leistungen/` then **302s to `/bs/usluge/`** — which puts a
+> redirecting URL inside the hreflang cluster (§1.4) and inside the sitemap (§5.1), both of which
+> this file forbids two sections later. With `fallbackType: 'rewrite'` it is worse: `/de/…` returns
+> 200 with Bosnian content, which is duplicate content under a German hreflang.
+> Chained fallback (`{ de: 'en', en: 'bs' }`) is additionally **not documented as supported** —
+> point fallbacks at the default locale or not at all.
+> §7 requires every page to exist in all three languages, so the correct configuration is no
+> fallback and a build that fails loudly when a translation is missing (§1.7).
+
+> **`@astrojs/sitemap` does not emit `/sitemap.xml`.** It emits `/sitemap-index.xml` plus
+> `/sitemap-0.xml`. The `robots.txt` in §5.2 must reference `sitemap-index.xml` for Approach B,
+> and that is the URL you submit in Search Console. Approach A's hand-rolled `tools/sitemap.mjs`
+> does produce `/sitemap.xml`. Getting this wrong is a silent no-op — Search Console just reports
+> "couldn't fetch".
 
 ```
 src/
@@ -687,10 +837,21 @@ export const ui = {
   de: { 'nav.services': 'Leistungen', 'nav.work': 'Referenzen', 'cta.quote': 'Angebot anfordern' },
 } as const;
 
-/** t('nav.services') bound to a locale, with a hard fail in dev if a key is missing. */
-export function useTranslations(lang: keyof typeof ui) {
-  return function t(key: keyof (typeof ui)['bs']): string {
-    return ui[lang][key] ?? ui[defaultLang][key];
+export type Lang = keyof typeof ui;
+export type UiKey = keyof (typeof ui)['bs'];
+
+/** t('nav.services') bound to a locale. Falls back to the default locale, and — unlike a silent
+    `??` fallback — makes the omission visible during development instead of shipping Bosnian
+    text on the German page without anyone noticing. */
+export function useTranslations(lang: Lang) {
+  return function t(key: UiKey): string {
+    const hit = ui[lang][key];
+    if (hit === undefined) {
+      if (import.meta.env.DEV) throw new Error(`Missing UI string "${key}" for locale "${lang}"`);
+      console.warn(`[i18n] missing "${key}" for "${lang}" — falling back to ${defaultLang}`);
+      return ui[defaultLang][key];
+    }
+    return hit;
   };
 }
 ```
@@ -730,14 +891,16 @@ const href = (l: (typeof locales)[number]) => getAbsoluteLocaleUrl(l, path[l]);
 ---
 // src/components/LangSwitcher.astro — preserves the current page. Same markup as §1.5.
 import { getRelativeLocaleUrl } from 'astro:i18n';
-import { languages } from '../i18n/ui';
-interface Props { path: Record<'bs' | 'en' | 'de', string>; }
+import { languages, type Lang } from '../i18n/ui';
+interface Props { path: Record<Lang, string>; }
 const { path } = Astro.props;
 const current = Astro.currentLocale ?? 'bs';
+// Object.keys() is typed string[]; indexing Record<Lang, string> with it fails `astro check`.
+const locales = Object.keys(languages) as Lang[];
 ---
 <nav class="lang" aria-label="Jezik · Language · Sprache">
   <ul class="lang__list">
-    {Object.keys(languages).map((l) => (
+    {locales.map((l) => (
       <li>
         {l === current
           ? <span class="lang__item lang__item--current" lang={l} aria-current="true">{l.toUpperCase()}</span>
@@ -855,32 +1018,65 @@ Defences, all CSS, all cheap:
 .nav__item, .card, .grid > * { min-inline-size: 0; }
 
 /* 3. Hyphenation. `hyphens: auto` requires a CORRECT lang attribute to load the dictionary —
-      it silently does nothing on <html lang="en"> containing German text. */
-:lang(de) {
-  hyphens: auto;
-  hyphenate-limit-chars: 8 4 4;    /* progressive enhancement: min word 8, min 4 before/after break */
+      it silently does nothing on <html lang="en"> containing German text.
+      `hyphens: auto` itself is Baseline widely available and does the real work.
+      `hyphenate-limit-chars` is NOT Baseline (Limited availability — no Safari support):
+      treat it as tuning that Chrome and Firefox apply and Safari ignores. Never rely on it to
+      prevent an overflow; rule 4 below is what actually prevents overflow. */
+:lang(de) { hyphens: auto; }
+@supports (hyphenate-limit-chars: 8 4 4) {
+  :lang(de) { hyphenate-limit-chars: 8 4 4; }   /* min word 8, min 4 chars before/after the break */
 }
 /* Bosnian hyphenation dictionaries are not reliably shipped by browsers — do not rely on hyphens:auto for bs. */
 :lang(bs) { hyphens: manual; }     /* use &shy; by hand in the 1–2 places it matters */
 
-/* 4. Last-resort break so a 33-character compound can never cause a horizontal scrollbar. */
+/* 4. Last-resort break so a 33-character compound can never cause a horizontal scrollbar.
+      This is the only rule here that is a guarantee rather than an enhancement. */
 h1, h2, h3, .card__title, .table th { overflow-wrap: break-word; }
 
-/* 5. Headings: balance short ones, pretty the long ones. Both are widely available (see luxury-register §0.2). */
+/* 5. Headings: balance short ones, pretty the long ones.
+      Support reality on 2026-08: `text-wrap` is Baseline NEWLY available (March 2024) and
+      `text-wrap-style: pretty` Baseline NEWLY available (October 2024) — neither is "widely
+      available" yet. No @supports needed: an unsupported browser simply wraps normally, which is
+      the pre-2024 status quo. Do not let a client believe these guarantee anything. */
 h1, h2, .card__title { text-wrap: balance; }
 p, li { text-wrap: pretty; }
 
-/* 6. Give German headings a slightly smaller clamp ceiling so the same design survives the longer words. */
-:lang(de) h1 { font-size: clamp(2.25rem, 6.4vw, 4.4rem); }   /* vs 7vw / 5rem for bs/en */
+/* 6. Give German headings a smaller clamp ceiling so the same design survives the longer words.
+      Both rules are shown — the second is what bs/en get. */
+h1            { font-size: clamp(2.5rem,  7vw,   5rem);   }
+:lang(de) h1  { font-size: clamp(2.25rem, 6.4vw, 4.4rem); }
 ```
 
 **Test procedure, not a hope:** before delivery, load each page at **320px wide** in all three languages and confirm zero horizontal overflow:
 
 ```js
 // Paste into DevTools console on every page × every language. Must log nothing.
-document.querySelectorAll('*').forEach((el) => {
-  if (el.scrollWidth > document.documentElement.clientWidth + 1) console.warn('OVERFLOW:', el);
-});
+// Comparing every element's scrollWidth to the VIEWPORT width (the obvious version of this
+// snippet) is useless: it flags every ancestor of one offender and every legitimate
+// overflow-x:auto scroller, so you get 40 warnings and ignore them. This reports only the
+// elements that actually stick out, and skips deliberate scroll containers.
+(() => {
+  const limit = document.documentElement.clientWidth;
+  const hits = [];
+  for (const el of document.querySelectorAll('body *')) {
+    const cs = getComputedStyle(el);
+    if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') continue;   // intentional scroller
+    if (cs.position === 'fixed') continue;                                 // out of flow, can't shift the page
+    const r = el.getBoundingClientRect();
+    if (r.width === 0) continue;
+    const over = Math.max(r.right - limit, -r.left);                       // right edge past viewport, or negative left
+    if (over > 1) hits.push({ el, over: Math.round(over), text: (el.textContent || '').trim().slice(0, 40) });
+  }
+  // Deepest elements first: the innermost offender is the one to fix.
+  hits.sort((a, b) => b.over - a.over);
+  if (!hits.length) console.log('%c✓ no horizontal overflow at ' + limit + 'px', 'color:green');
+  else console.table(hits.slice(0, 15));
+  // Belt and braces: the page itself must not scroll sideways.
+  const de = document.documentElement;
+  if (de.scrollWidth > de.clientWidth + 1)
+    console.warn('Document scrolls horizontally by', de.scrollWidth - de.clientWidth, 'px');
+})();
 ```
 
 ### 2.5 Bosnian diacritics — where č ć ž š đ break things
@@ -888,24 +1084,39 @@ document.querySelectorAll('*').forEach((el) => {
 **Five places, four of which are silent failures.**
 
 **(a) Fonts — the number one cause of a broken-looking BiH site.**
-The Google Fonts `latin` subset covers German (ä ö ü ß live in Latin-1 Supplement) but **not** Bosnian: č ć ž š đ live in **Latin Extended-A, U+0100–U+017F**. Request `latin-ext` or ship tofu boxes.
+The `latin` subset covers German (ä ö ü ß live in Latin-1 Supplement, U+00C0–U+00FF) but **not** Bosnian: č ć ž š đ live in **Latin Extended-A, U+0100–U+017F**. That much is fixed and verifiable. What *changes* is who is responsible for requesting it:
+
+- **Google Fonts CDN (`css2`) — the browser handles it for you.** `css2` returns one `@font-face` block *per subset*, each with its own `unicode-range`, and the browser downloads `latin-ext` automatically as soon as a č appears on the page. There is no documented `subset=` parameter on `css2`, and adding one is cargo cult. **The real CDN failure is a font family that has no `latin-ext` subset at all** — plenty of fashionable display faces don't. Check before you commit to the font, not after.
+- **Self-hosting — you are responsible.** This is where sites actually break, because you generated the subset yourself and left Latin Extended-A out.
+
+```bash
+# Before choosing a Google font: does it even ship latin-ext? One command, no guessing.
+curl -s "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap" \
+  -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; rv:120.0) Gecko/20100101 Firefox/120.0" \
+  | grep -c 'U+0100'      # 0 = no Latin Extended-A = this font will render tofu for č ć ž š đ
+```
 
 ```html
-<!-- If using the Google Fonts CDN: latin-ext is REQUIRED. -->
+<!-- Google Fonts CDN. preconnect to BOTH hosts: the CSS comes from googleapis.com, the
+     woff2 from gstatic.com, and only the second one needs crossorigin. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&subset=latin,latin-ext&display=swap">
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap">
 ```
 
 ```css
-/* Self-hosted (preferred — faster, no third-party request). unicode-range MUST include Latin Extended-A. */
+/* Self-hosted (preferred — faster, no third-party request, no consent question).
+   unicode-range MUST include Latin Extended-A. If this @font-face is the ONLY one for the
+   family, every character outside these ranges falls back to the next font in the stack —
+   so the ranges below are deliberately generous, not minimal. */
 @font-face {
   font-family: "Fraunces";
   src: url("/fonts/fraunces-latin-ext.woff2") format("woff2");
   font-weight: 400 600;
   font-display: swap;
   unicode-range: U+0000-00FF, U+0100-017F, U+2000-206F, U+20AC, U+2122;
-  /*             basic latin  ↑ č ć ž š đ AND ä ö ü ß    punctuation  €     ™            */
+  /*             basic latin  ↑ č ć ž š đ AND ä ö ü ß    – — „ " …  €     ™            */
 }
 ```
 
@@ -914,8 +1125,15 @@ The Google Fonts `latin` subset covers German (ä ö ü ß live in Latin-1 Suppl
 pip install fonttools brotli
 pyftsubset Fraunces.ttf --output-file=fraunces-latin-ext.woff2 --flavor=woff2 \
   --unicodes="U+0000-00FF,U+0100-017F,U+2000-206F,U+20AC,U+2122" \
-  --layout-features="kern,liga,onum,tnum"
+  --layout-features='+onum,+tnum'
 ```
+
+> **Use the additive `+` form.** `--layout-features="kern,liga,onum,tnum"` *replaces* pyftsubset's
+> default feature set, which silently drops `ccmp`, `mark`, `mkmk` and `locl` — the features that
+> position and compose diacritics. In a section about č ć ž š đ, that is the one flag you cannot
+> get wrong. `+onum,+tnum` keeps the defaults and adds to them.
+> For a variable font, check the axes survived: `pyftsubset` keeps them by default, but verify with
+> `fc-query` or by rendering both weights.
 
 **The check, run on every font on the site:** render this string and look at it. Any box, any fallback-font letter, any wrong weight = the font is not usable.
 
@@ -940,7 +1158,8 @@ Percent-encoded UTF-8 URLs are legal and Google handles them, but `/bs/usluge/ku
 // tools/slug.mjs — deterministic ASCII slugs for bs and de. Use at build time; never at runtime.
 const MAP = { č:'c', ć:'c', ž:'z', š:'s', đ:'d', dž:'dz', ä:'ae', ö:'oe', ü:'ue', ß:'ss' };
 export const slug = (s) =>
-  s.toLowerCase()
+  s.normalize('NFC')          // ← LOAD-BEARING. See the note below. Never remove this line.
+   .toLowerCase()
    .replace(/dž|[čćžšđäöüß]/g, (m) => MAP[m])
    .normalize('NFD').replace(/\p{Diacritic}/gu, '')   // catch anything the map missed
    .replace(/[^a-z0-9]+/g, '-')
@@ -948,8 +1167,21 @@ export const slug = (s) =>
 
 // slug('Kućni namještaj')      → 'kucni-namjestaj'
 // slug('Küchen & Türen')       → 'kuechen-tueren'
+// slug('Über uns')             → 'ueber-uns'
 // slug('Stepenice od hrasta')  → 'stepenice-od-hrasta'
 ```
+
+> **Why the leading `normalize('NFC')`.** The `[čćžšđäöüß]` character class matches *precomposed*
+> code points only. Text that arrives in NFD form — which is what macOS filesystems hand you, and
+> what some editors and CMS exports produce — stores `ü` as `u` + U+0308, so the class misses it
+> and the generic diacritic-stripper downstream turns it into `u`. You then get `/de/uber-uns/`
+> on one machine and `/de/ueber-uns/` on another: two URLs for one page, split link equity, and a
+> switcher that 404s. Verified: without the NFC line, `slug(nfd('Über uns'))` returns `uber-uns`
+> and `slug(nfd('Küchen'))` returns `kuchen`.
+>
+> **Slugs are decided once and then frozen.** Changing a slug after launch means a 301 and a
+> rankings dip. Generate them, paste them into `routes.js` (§1.3) by hand, and never run `slug()`
+> against live content again.
 
 Same rule for **image filenames** (`radionica-tuzla-01.avif`, never `radionica-tuzla-čamac.avif`) — some CDNs and some Windows toolchains still mangle non-ASCII filenames.
 
@@ -974,12 +1206,26 @@ const LOC = { bs: 'bs-BA', en: 'en-GB', de: 'de-DE' };
 
 export const money = (v, locale, currency = 'BAM') =>
   new Intl.NumberFormat(LOC[locale], { style: 'currency', currency, maximumFractionDigits: 0 }).format(v);
-// money(1800,'bs') → "1.800 KM"   money(920,'de','EUR') → "920 €"   money(920,'en','EUR') → "€920"
+// Verified output (Node 22 / full-ICU):
+// money(1800,'bs')      → "1.800 KM"
+// money(920,'de','EUR') → "920 €"
+// money(920,'en','EUR') → "€920"
+// money(1800,'en')      → "BAM 1,800"   ← NOT "KM 1,800". en-GB has no KM symbol for BAM.
+//                          If an English page must show KM, hand-format: `${nf.format(v)} KM`.
 
 export const date = (iso, locale) =>
-  new Intl.DateTimeFormat(LOC[locale], { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso));
+  new Intl.DateTimeFormat(LOC[locale], {
+    day: 'numeric', month: 'long', year: 'numeric',
+    timeZone: 'UTC',        // ← LOAD-BEARING, see below
+  }).format(new Date(iso));
 // date('2026-03-14','bs') → "14. mart 2026."   → de: "14. März 2026"   → en: "14 March 2026"
 ```
+
+> **`timeZone: 'UTC'` is not optional.** `new Date('2026-03-14')` parses a date-only string as
+> **UTC midnight**. Formatting it in any timezone west of UTC renders the previous day — verified:
+> without it, `date('2026-03-14','bs')` returns `"13. mart 2026."` on a machine set to
+> `America/New_York`. Your dev machine is in UTC+1 so you will never see this; a CI runner, a
+> Netlify build container, or a client checking the site while travelling will.
 
 Conventions to respect in hand-written copy too:
 
@@ -987,7 +1233,7 @@ Conventions to respect in hand-written copy too:
 |---|---|---|---|
 | Decimal separator | comma — `18,5 mm` | comma — `18,5 mm` | point — `18.5 mm` |
 | Thousands | dot or space — `1.800` | dot — `1.800` | comma — `1,800` |
-| Currency | `1.800 KM` (KM after) | `920 €` (€ after) | `€920` / `KM 1,800` |
+| Currency | `1.800 KM` (KM after) | `920 €` (€ after) | `€920`; for BAM, hand-format `1,800 KM` — `Intl` gives `BAM 1,800` |
 | Date | `14.03.2026.` (trailing dot) | `14.03.2026` | `14 March 2026` |
 | Phone display | `+387 35 123 456` | `+387 35 123 456` | `+387 35 123 456` |
 | `tel:` href | `tel:+38735123456` — always E.164, no spaces, in all three | | |
@@ -1156,11 +1402,6 @@ Placeholders use a fictional joinery in Tuzla. Replace every value; delete every
         { "@type": "Country", "name": "Deutschland" },
         { "@type": "Country", "name": "Österreich" }
       ],
-      "serviceArea": {
-        "@type": "GeoCircle",
-        "geoMidpoint": { "@type": "GeoCoordinates", "latitude": 44.53842, "longitude": 18.67610 },
-        "geoRadius": "80000"
-      },
       "knowsLanguage": ["bs", "en", "de"],
       "numberOfEmployees": { "@type": "QuantitativeValue", "value": 9 },
       "contactPoint": [
@@ -1223,6 +1464,15 @@ Notes on the fields that people get wrong:
 - **`priceRange`** takes `"$$"` or a real range (`"800–2500 KM"`), max 100 chars. If the client refuses to publish any price, omit the property rather than writing "on request".
 - **`aggregateRating` / `review` are for sites reviewing *other* businesses.** Do not self-mark your own star rating — it is against Google's guidelines and can earn a manual action. Real customer reviews belong on the Google Business Profile.
 - **`areaServed`** is what makes the diaspora/export story machine-readable. Include the DE/AT countries only if the client genuinely delivers there.
+- **Do not also add `serviceArea`.** schema.org marks `serviceArea` as **superseded by `areaServed`**; carrying both duplicates the same claim in two vocabularies and earns a warning at `validator.schema.org`. If you need a radius rather than a list of cities, put the `GeoCircle` *inside* `areaServed`:
+  ```json
+  "areaServed": [
+    { "@type": "GeoCircle",
+      "geoMidpoint": { "@type": "GeoCoordinates", "latitude": 44.53842, "longitude": 18.67610 },
+      "geoRadius": "80000" },
+    { "@type": "Country", "name": "Deutschland" }
+  ]
+  ```
 
 ### 3.4 Service pages
 
@@ -1287,6 +1537,10 @@ One `Service` node per service page, provider-linked by `@id` so the business is
 ```
 
 ### 3.5 BreadcrumbList — localised names, localised URLs
+
+**This node goes inside the same `@graph` as §3.4.** The `WebPage` above references
+`…/#breadcrumb`; if the `BreadcrumbList` is not in that graph the `@id` dangles and the breadcrumb
+is simply not read. One `<script>` per page, one `@graph`, all nodes in it (§3.1).
 
 ```json
 {
@@ -1484,9 +1738,11 @@ Hard requirements: **1200 × 630** (1.91:1) · JPG or PNG (**not WebP or AVIF** 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';               // NOT node:path — builds a legal file:// URL
 
 const CHROME = process.env.CHROME ?? 'chromium';        // or 'google-chrome', or the macOS .app path
 const TPL = readFileSync('tools/og/template.html', 'utf8');
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 const CARDS = [
   { out: 'bs-home',     photo: 'radionica.jpg', eyebrow: 'Tuzla · od 2007.',   title: 'Namještaj koji nadživi kuću', meta: '640 kuhinja · masivni hrast' },
@@ -1499,21 +1755,29 @@ mkdirSync('dist/og', { recursive: true });
 mkdirSync('.tmp/og', { recursive: true });
 
 for (const c of CARDS) {
-  const html = TPL
-    .replace('__PHOTO__',   'file://' + resolve('public/img/' + c.photo))
-    .replace('__EYEBROW__', c.eyebrow)
-    .replace('__TITLE__',   c.title)
-    .replace('__META__',    c.meta);
+  // .replace() with a STRING pattern also interprets $& / $1 in the replacement. A card title
+  // containing "$" would corrupt the output, so pass a function.
+  const put = (s, token, value) => s.replace(token, () => value);
+  const html = put(put(put(put(TPL,
+    '__PHOTO__',   pathToFileURL(resolve('public/img/' + c.photo)).href),  // Windows-safe, space-safe
+    '__EYEBROW__', esc(c.eyebrow)),
+    '__TITLE__',   esc(c.title)),
+    '__META__',    esc(c.meta));
   const tmp = resolve(`.tmp/og/${c.out}.html`);
   writeFileSync(tmp, html);
 
   // Chrome writes PNG regardless of the extension you give --screenshot.
   execFileSync(CHROME, [
-    '--headless=new', '--disable-gpu', '--hide-scrollbars',
+    '--headless', '--disable-gpu', '--hide-scrollbars',
     '--force-device-scale-factor=1',
     '--window-size=1200,630',
+    // A file:// page is an OPAQUE origin. @font-face fetches are CORS-checked, so the woff2
+    // fails silently and the card renders in the Georgia fallback — a subtly wrong card that
+    // still "works", which is the worst kind of bug. This flag is what makes the font load.
+    '--allow-file-access-from-files',
+    '--no-sandbox',                       // required in Docker/CI; drop it on a normal desktop
     `--screenshot=.tmp/og/${c.out}.png`,
-    'file://' + tmp,
+    pathToFileURL(tmp).href,
   ], { stdio: 'inherit' });
 
   // PNG → JPG at q≈82 keeps a photo card under ~180 KB. ffmpeg or ImageMagick, both free.
@@ -1522,7 +1786,14 @@ for (const c of CARDS) {
 }
 ```
 
-**Method 2 — Playwright**, if the project already has Node dev deps: `page.setViewportSize({width:1200,height:630})` then `page.screenshot({path, type:'jpeg', quality:82})`. Same template, fewer moving parts, one dev dependency.
+Two things to verify the first time you run this, because both fail *quietly*:
+
+1. **Open one generated card and check the typeface.** Georgia instead of your display face means the `@font-face` did not load — see the flag above. Inlining the woff2 as a `data:` URI in the template removes the problem permanently and is worth doing once.
+2. **Check the diacritics.** The card is where č ć ž š đ most often turn into boxes, because the subset you fed the browser (§2.5) is the same one that has to render `Šćepanović` at 76px.
+
+Chrome flag note: `--headless=new` was the transitional spelling. Since Chrome 132 old headless is gone and plain `--headless` *is* the new headless; `--headless=new` is still accepted but no longer needed.
+
+**Method 2 — Playwright**, if the project already has Node dev deps: `page.setViewportSize({width:1200,height:630})` then `page.screenshot({path, type:'jpeg', quality:82})`. Same template, fewer moving parts, one dev dependency — and it loads local fonts without the CORS flag, which is a real reason to prefer it.
 
 **Method 3 — hand-composited with ImageMagick** when there is no browser available at all:
 
@@ -1530,10 +1801,18 @@ for (const c of CARDS) {
 magick public/img/radionica.jpg -resize 1200x630^ -gravity center -extent 1200x630 \
   -fill '#000000' -colorize 55% \
   -font public/fonts/Fraunces.ttf -fill white \
-  -pointsize 74 -annotate +72+470 'Massivholz, das bleibt' \
+  -gravity northwest \
+  -pointsize 74 -annotate +72+430 'Massivholz, das bleibt' \
   -pointsize 28 -annotate +72+540 'Lieferung DE/AT · 4–7 Wochen' \
   -quality 82 dist/og/de-home.jpg
 ```
+
+> **`-gravity` is sticky.** The `-gravity center` needed for `-extent` stays in effect for every
+> later operator, so without the explicit `-gravity northwest` the `-annotate +72+430` offsets are
+> measured from the **centre** of the card and the text lands off-frame or overlapping. Set gravity
+> immediately before annotating, every time.
+> ImageMagick renders `č ć ž š đ` only if the `-font` file contains them — use the *unsubsetted*
+> TTF here, not the web subset.
 
 **Verify before delivery:** open the LinkedIn Post Inspector and Facebook Sharing Debugger (both free, no account cost) for one URL per language, and paste one link into WhatsApp/Viber on a phone. A broken OG card is invisible in Search Console and highly visible to the client.
 
@@ -1571,21 +1850,46 @@ Every URL entry lists **all** alternates including itself — the same reciproci
 
 ```js
 // tools/sitemap.mjs — generates the whole thing from routes.js. Zero dependencies.
-import { writeFileSync } from 'node:fs';
+// Run AFTER build.mjs: it writes into dist/, and it verifies that every URL it lists was built.
+import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { LOCALES, DEFAULT_LOCALE, ROUTES, url } from '../content/routes.js';
 
+/** Honest lastmod: the git commit date of the file that actually produces this page.
+    A fresh build timestamp on every URL trains Google to stop trusting lastmod entirely. */
+const gitDate = (path) => {
+  try {
+    const d = execFileSync('git', ['log', '-1', '--format=%cs', '--', path], { encoding: 'utf8' }).trim();
+    return d || null;
+  } catch { return null; }
+};
 const today = new Date().toISOString().slice(0, 10);
-const keys = Object.keys(ROUTES);
 
 const alt = (key) => [
   ...LOCALES.map((l) => `    <xhtml:link rel="alternate" hreflang="${l}" href="${url(key, l)}"/>`),
   `    <xhtml:link rel="alternate" hreflang="x-default" href="${url(key, DEFAULT_LOCALE)}"/>`,
 ].join('\n');
 
-const entries = keys.flatMap((key) =>
-  LOCALES.map((l) => `  <url>\n    <loc>${url(key, l)}</loc>\n    <lastmod>${today}</lastmod>\n${alt(key)}\n  </url>`)
-);
+const entries = [];
+const missing = [];
+for (const key of Object.keys(ROUTES)) {
+  for (const l of LOCALES) {
+    const loc = url(key, l);
+    // Never advertise a URL that was not built. This is the rule below, enforced instead of hoped.
+    const file = join('dist', new URL(loc).pathname, 'index.html');
+    if (!existsSync(file)) { missing.push(loc); continue; }
+    const src = `content/${l}/${key.replace(/\//g, '-') || 'home'}.json`;
+    const lastmod = gitDate(src) ?? today;
+    entries.push(`  <url>\n    <loc>${loc}</loc>\n    <lastmod>${lastmod}</lastmod>\n${alt(key)}\n  </url>`);
+  }
+}
+if (missing.length) {
+  console.error('✗ ROUTES lists URLs that were never built:\n  ' + missing.join('\n  '));
+  process.exit(1);          // fail the build rather than ship 404s to Search Console
+}
 
+mkdirSync('dist', { recursive: true });     // standalone runs must not ENOENT
 writeFileSync('dist/sitemap.xml',
 `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
@@ -1596,7 +1900,11 @@ ${entries.join('\n')}
 console.log(`→ dist/sitemap.xml (${entries.length} URLs)`);
 ```
 
-Rules: absolute URLs only · one canonical form (trailing slash everywhere, consistently) · **never list a URL that is noindexed, redirected or 404** · `lastmod` must be honest (a build timestamp on unchanged pages trains Google to ignore it — prefer the content file's git mtime) · submit once in Search Console per property.
+Rules: absolute URLs only · one canonical form (trailing slash everywhere, consistently) · **never list a URL that is noindexed, redirected or 404** (the `existsSync` guard above is that rule, made mechanical) · `lastmod` must be honest — a build timestamp on unchanged pages trains Google to ignore it, hence the git commit date · submit once in Search Console per property.
+
+> **Approach B submits a different file.** `@astrojs/sitemap` emits `/sitemap-index.xml` and
+> `/sitemap-0.xml`, not `/sitemap.xml`. Use whichever your build actually produces — in `robots.txt`
+> and in Search Console both.
 
 ### 5.2 robots.txt
 
@@ -1609,7 +1917,10 @@ Allow: /
 Disallow: /assets/tmp/
 Disallow: /.tmp/
 
+# Approach A (build.mjs + tools/sitemap.mjs):
 Sitemap: https://stolarija-vrelo.ba/sitemap.xml
+# Approach B (Astro + @astrojs/sitemap) — this file instead, NOT sitemap.xml:
+# Sitemap: https://stolarija-vrelo.ba/sitemap-index.xml
 ```
 
 Do not add `Crawl-delay` (Google ignores it). Do not block `/en/` or `/de/` "until they're ready" — ship them finished or not at all. If the client asks about AI crawlers (`GPTBot`, `ClaudeBot`, `PerplexityBot`, `Google-Extended`), present it as their business decision: blocking removes them from AI answers that increasingly drive discovery; allowing means their photos and copy are used for training. Default for a business that wants to be found: **allow**.
@@ -1663,7 +1974,11 @@ Do not add `Crawl-delay` (Google ignores it). Do not block `/en/` or `/de/` "unt
 </body>
 ```
 
-Rules: exactly one `<h1>` · no level skipped (`h2` → `h4` is a bug) · headings describe content, never chosen for size (size is CSS) · `<main>` once · every `<section>` labelled by its heading via `aria-labelledby` · `<address>` only for contact details of the page owner · `<nav>` elements distinguished by `aria-label` when there is more than one.
+The generic rules — one `<h1>`, no skipped levels, one `<main>`, size is CSS not heading level — you already know. The three that are specific to a trilingual site, and that get missed:
+
+1. **`aria-label` is content, and content is translated.** `aria-label="Glavna navigacija"` on the German page is the same bolt-on tell as Bosnian alt text (§5.5) — it just only reaches screen-reader users, so nobody ever reports it. Every `aria-label` in the templates comes from `common.json`, never a literal. This is why `renderNav()` in §1.8 takes `c['nav.label']`.
+2. **`<section>` maps to `role="region"` only when it has an accessible name.** That is what `aria-labelledby` buys; an unlabelled `<section>` is a `<div>` with extra characters.
+3. **The switcher's `aria-label` is the one label that stays multilingual** (`"Jezik · Language · Sprache"`), because its audience by definition cannot read the current page's language.
 
 ### 5.5 Image alt text in the right language
 
@@ -1703,7 +2018,7 @@ Page-weight budget for a BiH audience on mobile data (first view, uncached):
 | CSS | ≤ 30 KB gzip | One file, custom properties, no framework |
 | JS | ≤ 30 KB gzip, **zero dependencies** | IntersectionObserver + a handful of listeners |
 | Fonts | ≤ 90 KB | 2 weights (or 1 variable), woff2, subset with **latin-ext** (§2.5), `font-display: swap`, preloaded |
-| Hero image | ≤ 180 KB | AVIF with WebP fallback, `<picture>` + `srcset`, `fetchpriority="high"`, **never** `loading="lazy"` |
+| Hero image | ≤ 180 KB | AVIF in `srcset` with a JPG `src` fallback (below), `fetchpriority="high"`, **never** `loading="lazy"` |
 | All other images | ≤ 120 KB each | AVIF, `loading="lazy"`, `decoding="async"`, correct `sizes` |
 | **Total first view** | **≤ 900 KB mobile / ≤ 1.4 MB desktop** | |
 
@@ -1718,6 +2033,11 @@ LCP essentials:
 ```
 
 ```html
+<!-- No <picture> needed: AVIF is Baseline widely available, and a browser that cannot decode the
+     srcset candidates falls back to src. `sizes` and `srcset` must match the preload above
+     CHARACTER FOR CHARACTER or the preload fetches a second, unused file — doubling hero bytes
+     on the one request that decides LCP. No `loading` attribute at all (the default is eager;
+     writing loading="eager" is harmless but loading="lazy" here is the single worst LCP mistake). -->
 <img src="/img/hero-1600.jpg"
      srcset="/img/hero-800.avif 800w, /img/hero-1600.avif 1600w, /img/hero-2400.avif 2400w"
      sizes="100vw" width="2400" height="1350"
@@ -1727,9 +2047,17 @@ LCP essentials:
 
 > **The trap that connects this file to `scroll-effects.md`:** Chrome **ignores elements with `opacity: 0`** for LCP. An entrance animation that fades the hero `<h1>` or hero image in from `opacity: 0` makes LCP fire when the animation *finishes*, not when the pixel paints. **Never animate the LCP element from zero opacity.** Animate everything *below* the fold; let the hero's headline and image paint immediately, and use a `transform`-only reveal (e.g. a `clip-path` wipe already at full opacity) if the hero must move at all.
 
-CLS essentials: `width`/`height` or `aspect-ratio` on every image, video, iframe and embed · reserve height for the language hint banner (§1.5) and any cookie notice · self-hosted fonts with `size-adjust`/`ascent-override` matched to the fallback · never inject content above existing content after load · `content-visibility: auto` only together with `contain-intrinsic-size`.
+CLS essentials: `width`/`height` or `aspect-ratio` on every image, video, iframe and embed · **anything injected after load — the language hint (§1.5), a cookie notice — goes `position: fixed`, not into the flow**; reserving in-flow height for a banner shown to 5% of visitors is a worse trade than the fixed toast · self-hosted fonts with `size-adjust`/`ascent-override` matched to the fallback · never inject content above existing content after load · `content-visibility: auto` only together with `contain-intrinsic-size` (without it the property *creates* CLS instead of avoiding it).
 
-INP essentials: no scroll event handlers doing layout reads (scroll-driven CSS animations cost nothing on the main thread) · no long tasks on tap — defer analytics, defer everything non-critical with `defer` · keep total JS under the budget above, which makes INP a non-issue by construction.
+INP essentials: no scroll event handlers doing layout reads · no long tasks on tap — defer analytics, defer everything non-critical with `defer` · keep total JS under the budget above, which makes INP a non-issue by construction.
+
+> **Do not repeat the line "scroll-driven CSS animations are free."** Two corrections. (1) They run
+> off the main thread **only when the animated property is compositable** — `transform`, `opacity`,
+> `filter`. A scroll-driven animation of `width`, `height`, `clip-path` or a custom property that
+> feeds layout costs a main-thread relayout on every frame, which is *worse* than a well-written
+> rAF handler because it is invisible in a flame chart labelled "animation". (2) `animation-timeline`,
+> `scroll()` and `view()` are **Limited availability — not Baseline**. They are an upgrade over the
+> `IntersectionObserver` path, never a replacement for it. `scroll-effects.md` owns the fallback.
 
 ### 5.7 What a frame-sequence hero actually costs
 
@@ -1773,13 +2101,56 @@ export function sequenceBudget() {
 export function loadSequenceAfterLCP(startFn) {
   const frames = sequenceBudget();
   if (!frames) return;                                     // still image stays; nothing else is fetched
-  new PerformanceObserver((list, obs) => {
-    if (list.getEntries().length) {
-      obs.disconnect();
-      // requestIdleCallback keeps the fetch off the interaction path (INP protection).
-      (window.requestIdleCallback ?? setTimeout)(() => startFn(frames), { timeout: 2000 });
-    }
-  }).observe({ type: 'largest-contentful-paint', buffered: true });
+
+  // requestIdleCallback keeps the fetch off the interaction path (INP protection).
+  // NOTE: `(window.requestIdleCallback ?? setTimeout)(fn, opts)` — the tempting one-liner —
+  // throws "TypeError: Illegal invocation" in Chrome, because detaching a WindowOrWorkerGlobalScope
+  // method loses its `this`. And {timeout:2000} is meaningless as setTimeout's second argument.
+  const idle = (fn) => (typeof window.requestIdleCallback === 'function'
+    ? window.requestIdleCallback(fn, { timeout: 2000 })
+    : window.setTimeout(fn, 200));
+
+  // One-shot: the observer and the safety net below can both fire.
+  let started = false;
+  const go = () => { if (started) return; started = true; idle(() => startFn(frames)); };
+
+  // 'largest-contentful-paint' is Chromium-only. In Safari and Firefox, observe() with an
+  // unsupported single `type` is a silent no-op — the callback never fires and the sequence
+  // NEVER loads. Feature-detect, and fall back to "after load, when idle" everywhere else.
+  const lcpSupported = typeof PerformanceObserver === 'function'
+    && PerformanceObserver.supportedEntryTypes?.includes('largest-contentful-paint');
+
+  if (!lcpSupported) {
+    if (document.readyState === 'complete') go();
+    else window.addEventListener('load', go, { once: true });
+    return;
+  }
+
+  const po = new PerformanceObserver((list, obs) => {
+    if (list.getEntries().length) { obs.disconnect(); go(); }
+  });
+  po.observe({ type: 'largest-contentful-paint', buffered: true });
+  // Safety net: if no LCP entry ever arrives (a page with no qualifying element), don't
+  // strand the sequence forever.
+  window.addEventListener('load', () => setTimeout(() => { po.disconnect(); go(); }, 3000), { once: true });
+}
+```
+
+The `<figure>` markup below needs the still and the canvas stacked. Without this the canvas sits
+*below* the still image and you get two pictures:
+
+```css
+.seq { position: relative; margin: 0; }
+.seq__still, .seq__canvas { display: block; inline-size: 100%; block-size: auto; }
+.seq__canvas {
+  position: absolute; inset: 0;
+  inline-size: 100%; block-size: 100%;
+  opacity: 0;                       /* revealed only once frame data exists */
+}
+.seq__canvas[data-ready] { opacity: 1; }
+/* If the budget returns 0 the canvas never gets [data-ready] and the still is the whole effect. */
+@media (prefers-reduced-motion: reduce) {
+  .seq__canvas { display: none; }   /* belt and braces: JS already returned 0 */
 }
 ```
 
@@ -1892,8 +2263,9 @@ Objective. Every line is pass/fail. Do not report the site as done with an unche
 - [ ] Each language composed from the fact sheet, not translated (§2.1). Sentence counts differ between languages.
 - [ ] Register consistent site-wide: Vi/Sie for B2B & trades, including form labels, errors and the 404 page.
 - [ ] Zero banned phrases: "Dobrodošli na našu web stranicu", "Herzlich willkommen auf unserer Webseite", "kompetenter Partner", "Our company is engaged in".
-- [ ] German checked at 320px: no overflow, no clipped compound, no two-line button (§2.4 console snippet logs nothing).
-- [ ] Every font renders `ČĆŽŠĐ čćžšđ ÄÖÜäöüß` with no tofu and no fallback substitution.
+- [ ] German checked at 320px: no overflow, no clipped compound, no two-line button (§2.4 console snippet reports `✓`).
+- [ ] Every font renders `ČĆŽŠĐ čćžšđ ÄÖÜäöüß` with no tofu and no fallback substitution — **including in the OG cards** (§4.4), where a silent `file://` CORS failure swaps in the fallback face.
+- [ ] Slugs regenerated from NFC-normalised source (§2.5b); `/de/ueber-uns/`, never `/de/uber-uns/`.
 - [ ] `<meta charset="utf-8">` is the first tag in `<head>`; content files UTF-8 without BOM; contact form round-trips `Šćepanović` intact.
 - [ ] Prices, dates and phone numbers formatted per locale; VAT status stated explicitly.
 
@@ -1919,8 +2291,9 @@ Objective. Every line is pass/fail. Do not report the site as done with an unche
 - [ ] Favicon, `apple-touch-icon`, `theme-color`, manifest present.
 
 **Technical**
-- [ ] `sitemap.xml` lists every URL in every language with all four alternates; no noindexed/redirected/404 URLs; submitted in Search Console.
-- [ ] `robots.txt` present, allows CSS/JS/images, references the sitemap.
+- [ ] Sitemap lists every URL in every language with all four alternates; no noindexed/redirected/404 URLs; submitted in Search Console. **Approach A → `/sitemap.xml`; Approach B → `/sitemap-index.xml`.** Fetch the URL you put in `robots.txt` and confirm it returns 200.
+- [ ] `ROUTES` and the page list agree — every route key was actually built (§1.8 guard, §5.1 `existsSync` check both pass).
+- [ ] `robots.txt` present, allows CSS/JS/images, references the sitemap file that exists.
 - [ ] http→https and www→non-www (or the reverse) both 301 to the one canonical form; one trailing-slash convention.
 - [ ] Exactly one `<h1>` per page; no skipped heading levels; `<main>` present once; skip link works.
 - [ ] Every image has `width`+`height` (or `aspect-ratio`), correct `loading`, and **alt text in the page's language**; decorative images `alt=""`.
@@ -1928,7 +2301,11 @@ Objective. Every line is pass/fail. Do not report the site as done with an unche
 - [ ] Field targets: LCP ≤ 2.5 s, INP ≤ 200 ms, CLS ≤ 0.1 at p75 (delivery targets 1.8 s / 120 ms / 0.02).
 - [ ] Mobile first-view weight ≤ 900 KB; JS ≤ 30 KB gzip with zero dependencies.
 - [ ] Frame sequence (if any) gated by §5.7: not the LCP element, ≤ 24 frames on mobile, skipped on Save-Data / 2G-3G / reduced-motion.
-- [ ] `prefers-reduced-motion: reduce` verified on: language hint banner, switcher underline, every scroll effect.
+- [ ] `prefers-reduced-motion: reduce` verified on: language hint banner, switcher underline, frame sequence, every scroll effect. Verified by *toggling the OS setting*, not by reading the CSS.
+- [ ] Language hint banner: `.lang-hint[hidden] { display: none }` present (§1.5) — confirm by tabbing the page with the banner dismissed and finding no invisible link.
+- [ ] Every interactive target ≥ 24×24 CSS px (WCAG 2.2 SC 2.5.8), 44×44 where there is room — **language switcher and banner close button specifically**, tested on a real phone, not a desktop emulator.
+- [ ] Site tested with `localStorage` blocked (Safari private window): nothing throws, page still works.
+- [ ] Tested in **Safari and Firefox**, not only Chromium — the LCP-gated sequence loader and every Baseline-Newly feature (§0.1) behave differently there.
 - [ ] 404 page exists, is localised per language, and links back into the site.
 
 **Google Business Profile**
@@ -1948,4 +2325,14 @@ Objective. Every line is pass/fail. Do not report the site as done with an unche
 - Canonical rules incl. same-language canonicals and hreflang-cluster preference — https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls
 - `LocalBusiness` required/recommended properties, `openingHoursSpecification` formats, subtype guidance, GBP relationship — https://developers.google.com/search/docs/appearance/structured-data/local-business
 - FAQ rich result restriction (2023-09-14) and full removal (2026-06-15) — https://developers.google.com/search/docs/appearance/structured-data/faqpage
-- Astro i18n configuration (`locales`, `defaultLocale`, `routing.prefixDefaultLocale`, `routing.fallbackType`, `fallback`), `astro:i18n` helpers, `Astro.currentLocale` — https://docs.astro.build/en/guides/internationalization/
+- Astro i18n configuration (`locales`, `defaultLocale`, `routing.prefixDefaultLocale`, `routing.redirectToDefaultLocale`, `routing.fallbackType`, `fallback`), `astro:i18n` helpers, `Astro.currentLocale` — https://docs.astro.build/en/guides/internationalization/
+- LCP: elements with `opacity: 0` are excluded as candidates; only an element's initial size/position counts — https://web.dev/articles/lcp
+- `text-wrap` Baseline **Newly available, March 2024** — https://developer.mozilla.org/en-US/docs/Web/CSS/text-wrap
+- `text-wrap-style` (`pretty`) Baseline **Newly available, October 2024** — https://developer.mozilla.org/en-US/docs/Web/CSS/text-wrap-style
+- `hyphenate-limit-chars` **Limited availability, not Baseline** — https://developer.mozilla.org/en-US/docs/Web/CSS/hyphenate-limit-chars
+- `animation-timeline` **Limited availability, not Baseline** — https://developer.mozilla.org/en-US/docs/Web/CSS/animation-timeline
+- WCAG 2.2 SC 2.5.8 Target Size (Minimum), 24×24 CSS px — https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+
+**Claims in this file that were tested by execution, not read:** the NFD slug divergence (§2.5b), the
+`Intl` timezone off-by-one and the `BAM 1,800` output (§2.6), and the parity checker's behaviour on a
+missing locale file (§1.7). Re-run them if you change those snippets.

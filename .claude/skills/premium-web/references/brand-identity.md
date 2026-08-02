@@ -31,10 +31,13 @@ Chromium ships preinstalled. Playwright is installed globally, so scripts must b
 export NODE_PATH="$(npm root -g)"
 export PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
 node -e 'const{chromium}=require("playwright");console.log("playwright",require("playwright/package.json").version)'
-# -> playwright 1.62.1
+# -> playwright 1.56.1   (whatever it prints is fine; do not assume a version, check it —
+#                         the bundled Chromium build number below moves with it)
 
-ls /opt/pw-browsers/chromium-1194/chrome-linux/chrome   # the binary, if you need it directly
+ls -d /opt/pw-browsers/chromium-*/chrome-linux/chrome   # the binary, if you need it directly
 ```
+
+The `chromium-<build>` directory number changes with every Playwright release — glob it, never hardcode it.
 
 If Playwright is *not* installed globally in the environment you land in:
 
@@ -134,7 +137,9 @@ fs.mkdirSync(path.join(OUT, "assets"), { recursive: true });
       if (r.width * r.height < 4) continue;            // ignore invisible nodes
       bump("color", cs.color);
       bump("background", cs.backgroundColor);
-      bump("border", cs.borderTopColor !== cs.color ? cs.borderTopColor : null);
+      // border colour is computed on EVERY element, painted or not — gate on real width,
+      // or the border tally is just a copy of the text colour tally.
+      if (parseFloat(cs.borderTopWidth) > 0 && cs.borderTopStyle !== "none") bump("border", cs.borderTopColor);
       fonts[cs.fontFamily] = (fonts[cs.fontFamily] || 0) + 1;
       if (el.textContent && el.textContent.trim().length > 2) {
         const k = `${cs.fontFamily} | ${cs.fontWeight} | ${cs.fontSize} | ${cs.letterSpacing} | ${cs.textTransform}`;
@@ -147,7 +152,9 @@ fs.mkdirSync(path.join(OUT, "assets"), { recursive: true });
       url: location.href,
       title: document.title,
       description: meta('meta[name="description"]'),
-      ogImage: abs(meta('meta[property="og:image"]') || ""),
+      // NOTE: abs("") resolves to location.href — never pass an empty string through abs(),
+      // or a site with no og:image "gets" one that is actually its own HTML document.
+      ogImage: (() => { const v = meta('meta[property="og:image"]'); return v ? abs(v) : null; })(),
       ogSiteName: meta('meta[property="og:site_name"]'),
       themeColor: meta('meta[name="theme-color"]'),     // often the truest brand colour
       icons, logos, inlineSvgLogos,
@@ -174,10 +181,16 @@ fs.mkdirSync(path.join(OUT, "assets"), { recursive: true });
   fs.writeFileSync(path.join(OUT, "evidence.json"), JSON.stringify(report, null, 2));
 
   // --- screenshots: you MUST look at these, JSON alone will mislead you ------
-  await page.screenshot({ path: path.join(OUT, "desktop-full.png"), fullPage: true });
+  // deviceScaleFactor 2 x a very long page can exceed Chromium's 16384px surface limit and
+  // throw. Fall back to a viewport shot rather than losing the whole run.
+  const shot = async (file, opts) => {
+    try { await page.screenshot({ path: path.join(OUT, file), fullPage: true, ...opts }); }
+    catch { await page.screenshot({ path: path.join(OUT, file), fullPage: false, ...opts }); }
+  };
+  await shot("desktop-full.png");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(500);
-  await page.screenshot({ path: path.join(OUT, "mobile-full.png"), fullPage: true });
+  await shot("mobile-full.png");
 
   // --- download candidates through the browser context (keeps cookies/referer)
   const wanted = [...new Set([...report.logos, ...report.icons, report.ogImage,
@@ -343,7 +356,7 @@ console.log([...bins.values()].sort((a, b) => b.n - a.n).slice(0, 6).map((e) => 
 import sys
 from PIL import Image
 im = Image.open(sys.argv[1]).convert("RGB").resize((128, 128))
-q  = im.quantize(colors=8, method=Image.MEDIANCUT)
+q  = im.quantize(colors=8, method=Image.Quantize.MEDIANCUT)   # enum, not Image.MEDIANCUT (Pillow >= 9.1)
 pal = q.getpalette()
 for count, idx in sorted(q.getcolors(), reverse=True):
     r, g, b = pal[idx*3:idx*3+3]
@@ -351,12 +364,7 @@ for count, idx in sorted(q.getcolors(), reverse=True):
     print(f"#{r:02x}{g:02x}{b:02x}", round(count/(128*128), 3))
 ```
 
-**ImageMagick** — use only if `magick` is on PATH (it frequently is not; check before you write the command).
-
-```bash
-command -v magick >/dev/null && magick logo.png -resize 128x128 -colors 8 -depth 8 \
-  -format %c histogram:info: | sort -rn | head -8
-```
+Three extractors is already one more than you need. Pick one: **node-vibrant** when you want confidence weighting, **Pillow** when you want zero install, **sharp** when the project already has it. Do not run all three and average them — that produces a colour nobody chose.
 
 ### 2.2 Choosing brand vs accent from the swatches
 
@@ -495,12 +503,17 @@ export function buildPalette({ brand, accent = brand, name = "brand" }) {
     const text  = forceContrast(isLight ? n[900] : n[100], surface, 7);    // AAA body
     const muted = forceContrast(isLight ? n[600] : n[400], surface, 4.5);  // AA secondary
     const line  = isLight ? n[200] : n[800];
+    // WCAG 1.4.11 (Non-text Contrast) wants >= 3.0 for the boundary of any control the user
+    // must perceive — input borders, checkbox outlines, focus rings. --c-line is ~1.2:1 and
+    // is for decorative hairlines ONLY. Anything interactive uses --c-line-strong.
+    const lineStrong = forceContrast(isLight ? n[500] : n[500], surface, 3);
     const acc   = forceContrast(
       shade(accentC, isLight ? Math.min(accentC.L, 0.62) : Math.max(accentC.L, 0.72)), surface, 4.5);
     const fill  = readableFill(
       shade(accentC, isLight ? accentC.L : Math.max(accentC.L, 0.55)), 4.5);
     return {
       surface, raised, sunken, text, muted, line,
+      "line-strong": lineStrong,
       accent: acc,
       "accent-solid": fill.fill,
       "accent-on": fill.on,
@@ -534,26 +547,45 @@ ${keys.map(pair).join("\n")}
 }
 
 /* ---------- CLI: prints CSS on stdout, the contrast audit on stderr ---------- */
-if (import.meta.url === `file://${process.argv[1]}`) {
+// pathToFileURL, NOT `file://${argv[1]}` — the naive form silently fails to match
+// (so the CLI prints nothing) for any path containing a space or a non-ASCII character.
+import { pathToFileURL } from "node:url";
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [brand = "#1b3a2f", accent = "#c2703d"] = process.argv.slice(2);
   const p = buildPalette({ brand, accent });
   console.log(toCss(p));
   console.error("\n// contrast audit (AA body 4.5, AAA body 7, AA large/UI 3.0)");
+  let fail = 0;
+  const check = (label, a, b, target) => {
+    const r = contrast(a, b);
+    if (r < target) fail++;
+    console.error(`// ${label}: ${r.toFixed(2)}  (need ${target})${r < target ? "  <-- FAIL" : ""}`);
+  };
   for (const mode of ["light", "dark"]) {
-    for (const k of ["text", "muted", "accent", "brand"])
-      console.error(`// ${mode}/${k} on surface: ${contrast(p[mode][k], p[mode].surface).toFixed(2)}`);
-    console.error(`// ${mode}/accent-on on accent-solid: ${contrast(p[mode]["accent-on"], p[mode]["accent-solid"]).toFixed(2)}`);
+    check(`${mode}/text on surface`,   p[mode].text,   p[mode].surface, 7);
+    check(`${mode}/muted on surface`,  p[mode].muted,  p[mode].surface, 4.5);
+    check(`${mode}/accent on surface`, p[mode].accent, p[mode].surface, 4.5);
+    check(`${mode}/brand on surface`,  p[mode].brand,  p[mode].surface, 4.5);
+    check(`${mode}/line-strong on surface`, p[mode]["line-strong"], p[mode].surface, 3);
+    check(`${mode}/accent-on on accent-solid`,
+          p[mode]["accent-on"], p[mode]["accent-solid"], 4.5);
   }
+  if (fail) { console.error(`// ${fail} FAILING ROLE(S) — do not ship this palette`); process.exit(1); }
 }
 ```
 
 ```bash
-node palette.mjs "#1b3a2f" "#c2703d" > src/styles/tokens.css
+mkdir -p src/styles
+node palette.mjs "#1b3a2f" "#c2703d" > src/styles/tokens.css || echo "PALETTE FAILED AUDIT"
 # stderr:
 # light/text on surface: 17.63     light/muted: 5.90    light/accent: 4.52    light/brand: 12.23
-# light/accent-on on accent-solid: 5.11
+# light/line-strong on surface: 3.92        light/accent-on on accent-solid: 5.11
 # dark/text  on surface: 16.63     dark/muted:  7.30    dark/accent:  7.59    dark/brand:  9.98
+# dark/line-strong on surface: 4.91         dark/accent-on on accent-solid: 5.11
 ```
+
+The exit code is the gate: non-zero means a role missed its ratio and the file must not ship,
+whatever the CSS on stdout looks like.
 
 Real emitted output for that input:
 
@@ -574,18 +606,25 @@ Real emitted output for that input:
   --c-text:         light-dark(#191715, #efeceb);
   --c-muted:        light-dark(#69625e, #a39d9a);
   --c-line:         light-dark(#dfdbda, #2e2a29);
+  --c-line-strong:  light-dark(#867e7a, #867e7a);
   --c-accent:       light-dark(#b1602d, #e18d5a);
   --c-accent-solid: light-dark(#c2703d, #c2703d);
-  --c-accent-on:    light-dark(#ffffff, #111111);
+  --c-accent-on:    light-dark(#111111, #111111);
   --c-brand:        light-dark(#1b3a2f, #9ec1b2);
 }
 ```
+
+Two of those pairs are deliberately identical, and that is a correctness check, not a bug:
+`#c2703d` already clears 4.5:1 against `#111111`, so `readableFill()` returns it untouched in
+both themes — which means `--c-accent-on` **must** also be identical in both. If you ever see
+`--c-accent-solid` equal across the pair while `--c-accent-on` differs, the emitter is lying to
+you: re-run the audit before you believe the file.
 
 Notice `--n-0` is `#fffdfc`, not `#ffffff`. That 2-point warm bias is the difference between "a website" and "their website", and it costs nothing.
 
 ### 2.4 The token contract
 
-**Ten semantic roles. Consume these; never hardcode a hex in a component.**
+**Eleven semantic roles. Consume these; never hardcode a hex in a component.**
 
 | Token | Role | Guaranteed contrast |
 |---|---|---|
@@ -594,31 +633,67 @@ Notice `--n-0` is `#fffdfc`, not `#ffffff`. That 2-point warm bias is the differ
 | `--c-sunken` | wells, code blocks, inset media | — |
 | `--c-text` | body and headings | ≥ 7.0 on `--c-surface` (AAA) |
 | `--c-muted` | captions, meta, disabled | ≥ 4.5 on `--c-surface` (AA) |
-| `--c-line` | hairlines, dividers, input borders | non-text; decorative |
+| `--c-line` | hairlines, dividers, decorative rules **only** | none — ~1.2:1, decorative |
+| `--c-line-strong` | borders of inputs, checkboxes, focus rings, chips | ≥ 3.0 on `--c-surface` (WCAG 1.4.11) |
 | `--c-accent` | accent **text** and icons, links | ≥ 4.5 on `--c-surface` |
 | `--c-accent-solid` | filled buttons, active chips | non-text fill |
 | `--c-accent-on` | label **on** `--c-accent-solid` | ≥ 4.5 on `--c-accent-solid` |
 | `--c-brand` | logo lockup, hero rules, footer mark | ≥ 4.5 on `--c-surface` |
 
-Derive everything else at runtime with relative colour syntax rather than adding tokens (Baseline since Sept 2024):
+Derive everything else at runtime with relative colour syntax rather than adding tokens. Relative
+colour is Baseline **newly** available (16 Sept 2024; widely available forecast March 2027), so it
+needs a real fallback — and the fallback has to be built the right way round.
+
+**The trap:** if `oklch(from …)` is unsupported, the declaration is not "ignored". It is *invalid at
+computed-value time*, which sets the property to `unset` — beating any earlier declaration in the
+same rule. So `border: 1px solid oklch(from …)` does not degrade to a plain border; it degrades to
+**no border at all**. Never write a relative-colour declaration outside an `@supports` gate, and
+never rely on an earlier declaration to catch it.
 
 ```css
-/* Derived states. No new tokens, no Sass, no build step. */
+/* Base: no relative colour anywhere. color-mix() is Baseline widely available, so this
+   layer is what actually ships to everyone. */
 .btn {
   background: var(--c-accent-solid);
   color: var(--c-accent-on);
-  border: 1px solid oklch(from var(--c-accent-solid) calc(l - 0.08) c h);
+  border: 1px solid color-mix(in oklab, var(--c-accent-solid) 84%, black);
 }
-.btn:hover  { background: oklch(from var(--c-accent-solid) calc(l + 0.05) c h); }
-.btn:active { background: oklch(from var(--c-accent-solid) calc(l - 0.05) c h); }
+.btn:active { background: color-mix(in oklab, var(--c-accent-solid) 92%, black); }
+.btn:focus-visible { outline: 2px solid var(--c-line-strong); outline-offset: 2px; }
+
+/* Hover states go behind (hover: hover). On touch, :hover latches after a tap and the button
+   stays in its hover colour until you tap elsewhere — which reads as a stuck, broken control. */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover { background: color-mix(in oklab, var(--c-accent-solid) 92%, white); }
+}
+
+/* Enhancement: same states, hue- and chroma-preserving. Gated, so the base layer survives. */
+@supports (color: oklch(from red l c h)) {
+  .btn         { border-color: oklch(from var(--c-accent-solid) calc(l - 0.08) c h); }
+  .btn:active  { background: oklch(from var(--c-accent-solid) calc(l - 0.04) c h); }
+  @media (hover: hover) and (pointer: fine) {
+    .btn:hover { background: oklch(from var(--c-accent-solid) calc(l + 0.04) c h); }
+  }
+}
 
 /* Tints and washes: mix toward the surface, so they follow the theme automatically. */
 .badge { background: color-mix(in oklab, var(--c-accent) 12%, var(--c-surface)); }
-
-@supports not (color: oklch(from red l c h)) {
-  .btn:hover { filter: brightness(1.06); }   /* cheap, GPU-friendly, good enough */
-}
 ```
+
+Two things about that hover step:
+
+- **±0.04 L, not ±0.05.** `--c-accent-on` was proved against the *base* fill only. Shifting the
+  fill's lightness moves its contrast with the label — an accent that audited at 4.6:1 can drop
+  under 4.5:1 on hover. 0.04 keeps the drift inside the headroom `readableFill()` leaves; if your
+  audit prints an `accent-on` ratio below 5.0, hover by mixing toward the *label* colour instead of
+  away from it, or raise `readableFill`'s target to 5.0 and re-emit.
+- The origin colour is a `light-dark()` value, which is the part of this pattern most likely to be
+  assumed rather than checked. It works: `light-dark()` resolves at computed-value time, so it
+  nests correctly inside both `color-mix()` and relative colour, and it re-resolves per scheme.
+  Verified in Chromium — with `--c-accent-solid: light-dark(#c2703d, #3d70c2)`,
+  `oklch(from var(--c-accent-solid) calc(l + 0.04) c h)` computes to hue 50.7 under
+  `color-scheme: light` and hue 259.5 under dark, i.e. it follows the theme rather than freezing on
+  the light value.
 
 Do **not** reach for `contrast-color()` as the primary mechanism. It only shipped everywhere recently (Safari 26.0 / Firefox 146 / Chrome 147, Apr 2026), so it is *newly* available, not widely available, and it returns only black or white. Bake contrast in at build time with `palette.mjs`; use `contrast-color()` as a progressive enhancement for user-generated or runtime-unknown colours only:
 
@@ -632,20 +707,34 @@ Do **not** reach for `contrast-color()` as the primary mechanism. It only shippe
 
 1. Every text role hits its ratio in **both** themes (the script's stderr audit proves it).
 2. `--c-surface` in dark mode is **not** `#000000`. Pure black kills the elevation model and smears on OLED scroll.
-3. The neutral ramp has **non-zero chroma** — grep the output for `#[0-9a-f]\{2\}\1\1` patterns; if the greys are literally equal-channel, the hue bias did not apply.
+3. The neutral ramp has **non-zero chroma**. A backreference needs a capture group, and it must be a *basic* regex — `grep -E '#([0-9a-f]{2})\1\1'` is not portable and `grep '#[0-9a-f]\{2\}\1\1'` has no group to refer back to. This is the working form:
+   ```bash
+   # scope to the --n- ramp: #111111 / #ffffff are legitimate values for --c-accent-on
+   grep -- '--n-' src/styles/tokens.css | grep -o '#\([0-9a-f]\{2\}\)\1\1' \
+     && echo "PURE GREY IN RAMP — hue bias did not apply" || echo "ramp is hue-biased"
+   ```
 4. Accent appears on **less than ~10%** of painted area. Luxury is restraint; a wall of brand colour reads as a template.
-5. Both themes rendered and screenshotted before delivery:
+5. Both themes rendered and screenshotted before delivery — **and both engines**. Firefox is not
+   a nicety here: it is the one that does not run scroll-driven animations (§4.3), so it is the
+   only cheap way to prove the reveal fallback works and the page is not blank.
    ```bash
    NODE_PATH=$(npm root -g) node -e '
-   const {chromium}=require("playwright");(async()=>{
-     const b=await chromium.launch({args:["--no-sandbox"]});
-     for (const scheme of ["light","dark"]) {
-       const c=await b.newContext({colorScheme:scheme,viewport:{width:1440,height:900},deviceScaleFactor:2});
-       const p=await c.newPage(); await p.goto("http://localhost:5173");
-       await p.screenshot({path:`review-${scheme}.png`,fullPage:true});
-     }
-     await b.close();})()'
+   const pw=require("playwright");(async()=>{
+     for (const name of ["chromium","firefox"]) {
+       let b; try { b=await pw[name].launch({args:name==="chromium"?["--no-sandbox"]:[]}); }
+       catch(e){ console.error(`skip ${name}: ${e.message.split("\n")[0]}`); continue; }
+       for (const scheme of ["light","dark"]) {
+         const c=await b.newContext({colorScheme:scheme,viewport:{width:1440,height:900},deviceScaleFactor:2});
+         const p=await c.newPage(); await p.goto("http://localhost:5173",{waitUntil:"load"});
+         await p.waitForTimeout(1500);                      // let reveals settle
+         await p.screenshot({path:`review-${name}-${scheme}.png`,fullPage:true});
+         await c.close();
+       }
+       await b.close();
+     }})()'
    ```
+   Read the Firefox shots. If sections are missing or blank, the `.reveal` fallback is not wired
+   up — that is the failure mode this check exists to catch.
 
 ---
 
@@ -731,9 +820,25 @@ f = TTFont('fraunces-var.woff2'); f.flavor = None; f.save('fraunces.ttf')"
 fonttools varLib.instancer fraunces.ttf wght=600 -o fraunces-600.ttf
 
 pyftsubset fraunces-600.ttf --output-file=fraunces-600.woff2 --flavor=woff2 \
-  --layout-features='kern,liga' --desubroutinize \
-  --unicodes="U+0020-007E,U+00A0-00FF,U+2018-201D,U+2013,U+2014,U+2026"
+  --layout-features='ccmp,locl,kern,liga,calt,mark,mkmk,rlig' \
+  --unicodes="U+0020-007E,U+00A0-00FF,U+0100-017F,U+2018-201D,U+2013,U+2014,U+2026,U+20AC"
 ```
+
+Two flags people get wrong here, both silently:
+
+- **`--layout-features` replaces the default set, it does not add to it.** Passing `'kern,liga'`
+  drops `ccmp`, `locl`, `mark` and `mkmk` — which is how you end up with a display face whose
+  accented characters compose wrongly or lose their diacritic entirely. Either pass the list
+  above, or use `--layout-features+='…'` and keep the defaults.
+- **`--desubroutinize` is a CFF-only optimisation.** On a TrueType-outline font (which is what
+  `varLib.instancer` hands you for most variable fonts) it does nothing but cost you a warning.
+  Dropped above.
+
+**Include U+0100-017F unless you have checked the copy.** Latin Extended-A is where `č ć ž š đ ł ő
+ā` live. Subset it out and every business name, street name and surname carrying a diacritic
+silently falls back to the system serif mid-headline — the single most common self-inflicted bug in
+this pipeline, and one you will not see if you only ever proof English copy. U+20AC (€) is in the
+list for the same reason: it is outside Latin-1 and it appears in every price on a European site.
 
 | File | Bytes | as base64 |
 |---|---|---|
@@ -747,18 +852,25 @@ Keep the variable font **only** when you actually animate or vary an axis (e.g. 
 **Standard case — self-hosted file, `font-display: swap`:**
 
 ```css
-/* Instanced + subset. One file, one weight, no FOIT. */
+/* Instanced + subset. One file, one weight, no FOIT.
+   unicode-range MUST be a superset of nothing you actually use — it is a promise to the browser
+   that characters outside it are not in this file. Keep it in sync with --unicodes above. */
 @font-face {
   font-family: "Display";
   src: url("/fonts/fraunces-600.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   font-display: swap;         /* text is visible immediately in the fallback */
-  unicode-range: U+0000-00FF, U+2013-2014, U+2018-201D, U+2026;
+  unicode-range: U+0000-00FF, U+0100-017F, U+2013-2014, U+2018-201D, U+2026, U+20AC;
 }
 
+/* Repeat this pair for Body and Utility. The three families below are named "Display",
+   "Body" and "Utility" — those names only exist because an @font-face declares them, so a
+   :root block referencing "Body" with no matching @font-face silently renders system-ui
+   for every paragraph on the site. Declare all three or delete the ones you did not build. */
+
 /* Metric-matched fallback so the swap does not shift layout.
-   size-adjust et al. are Baseline WIDELY AVAILABLE (since Sept 2023). */
+   size-adjust and the *-override descriptors are Baseline widely available (since Sept 2023). */
 @font-face {
   font-family: "Display Fallback";
   src: local("Georgia"), local("Times New Roman");
@@ -769,11 +881,18 @@ Keep the variable font **only** when you actually animate or vary an axis (e.g. 
 }
 
 :root {
-  --font-display: "Display", "Display Fallback", Georgia, serif;
+  --font-display: "Display", "Display Fallback", Georgia, "Times New Roman", serif;
   --font-body:    "Body", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-utility: "Utility", ui-monospace, "SF Mono", Menlo, monospace;
 }
 ```
+
+**`local()` fallbacks are a desktop-only optimisation.** Georgia and Times New Roman are absent on
+Android and on most Linux desktops, so on those platforms the `Display Fallback` face matches
+nothing, the metric overrides never apply, and the layout shift you thought you had fixed comes
+back — on exactly the devices with the worst connections. Either accept that (the overrides still
+help the ~60% of traffic that has the fonts) or add a `local()` for a font that *is* present
+(`local("Noto Serif")`, `local("Tinos")`) with its own measured overrides.
 
 Measure the override values instead of guessing them:
 
@@ -784,14 +903,21 @@ const { chromium } = require("playwright");
   const b = await chromium.launch({ args: ["--no-sandbox"] });
   const p = await b.newPage();
   await p.goto("http://localhost:5173");        // page must already load the real face
-  console.log(await p.evaluate(() => {
+  console.log(await p.evaluate(async () => {
+    // Without this the real face has not arrived, both measurements return the SAME
+    // fallback metrics, and the script confidently reports size-adjust: 100.0%.
+    await document.fonts.ready;
+    if (!document.fonts.check('600 100px "Display"')) {
+      return { error: 'the "Display" face is not loaded on this page — measurement is meaningless' };
+    }
+    const W = 600;                              // measure at the weight you actually ship
     const m = (family) => {
       const s = document.createElement("span");
-      s.style.cssText = `position:absolute;visibility:hidden;font:400 100px ${family}`;
-      s.textContent = "Hxn"; document.body.append(s);
+      s.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font:${W} 100px ${family}`;
+      s.textContent = "Hxnop"; document.body.append(s);
       const w = s.getBoundingClientRect().width; s.remove(); return w;
     };
-    return { sizeAdjust: (m('"Display"') / m("Georgia") * 100).toFixed(1) + "%" };
+    return { sizeAdjust: ((m('"Display"') / m("Georgia")) * 100).toFixed(1) + "%" };
   }));
   await b.close();
 })();
@@ -924,19 +1050,31 @@ Emit the mood's motion register as tokens too, so the effect files consume it ra
   }
 }
 
-/* Reveal built from the tokens: transform + opacity only. */
-.reveal {
+/* Hover motion, wherever it appears, is gated on a real pointer. */
+@media (hover: hover) and (pointer: fine) {
+  .card:hover { transform: scale(var(--motion-hover-scale)); }
+}
+
+/* Reveal built from the tokens: transform + opacity only — never height, top or margin.
+   NOTE the .js gate. Without it, a browser that runs no JS and has no scroll-driven
+   animations paints opacity:0 and never removes it: the entire page is blank. */
+.reveal { opacity: 1; }
+.js .reveal {
   opacity: 0;
   transform: translate3d(0, var(--motion-distance), 0);
   transition: opacity var(--motion-duration) var(--motion-ease),
               transform var(--motion-duration) var(--motion-ease);
+  transition-delay: calc(var(--i, 0) * var(--motion-stagger));
+  /* no will-change here: opacity and transform are already composited, and a will-change on
+     every .reveal on a long page forces a layer per element and costs more than it saves. */
 }
-.reveal.is-in { opacity: 1; transform: none; }
+.js .reveal.is-in { opacity: 1; transform: none; }
 
-/* Native scroll-driven upgrade where supported; the IO class above is the fallback. */
+/* Native scroll-driven upgrade WHERE SUPPORTED — see the support note below; this is
+   Limited availability, so the IntersectionObserver path is the one most users get. */
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
-    .reveal {
+    .js .reveal, .reveal {
       opacity: 1; transform: none; transition: none;
       animation: reveal-in linear both;
       animation-timeline: view();
@@ -950,6 +1088,82 @@ Emit the mood's motion register as tokens too, so the effect files consume it ra
 }
 ```
 
+The CSS above does nothing on its own. This is the other half, and it is not optional:
+
+```html
+<!-- In <head>, before the stylesheet, so there is no flash of visible-then-hidden content. -->
+<script>document.documentElement.classList.add("js");</script>
+```
+
+```js
+// Defer or place at end of <body>. ~15 lines, no dependency, no library.
+(() => {
+  const els = document.querySelectorAll(".reveal");
+  if (!els.length) return;
+  const show = (el) => el.classList.add("is-in");
+
+  // No observer, or the user asked for no motion: show everything now and stop.
+  // There is nothing to stagger when there is no animation.
+  if (!("IntersectionObserver" in window) ||
+      matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    els.forEach(show);
+    return;
+  }
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) {
+      show(e.target);
+      io.unobserve(e.target);          // one-shot: never animate the same element twice
+    }
+  }, { rootMargin: "0px 0px -10% 0px", threshold: 0.01 });
+  els.forEach((el) => io.observe(el));
+})();
+```
+
+**Deliberately, this does not check whether scroll-driven animations are supported.** The obvious
+optimisation — bail out when `CSS.supports("animation-timeline: view()")` is true, on the grounds
+that the CSS is handling it — creates a silent dependency between two files: delete or mis-copy the
+`@supports` block and every `.reveal` on the page stays at `opacity: 0` in Chrome and Safari, with
+no error anywhere. (Verified: that is exactly what happens.) Running the observer in both cases is
+free by comparison. When the scroll-driven animation *is* running it owns `opacity` and `transform`
+outright — animation-origin declarations beat author declarations — so `is-in` lands as a harmless
+no-op and the two paths cannot fight.
+
+Under `prefers-reduced-motion: reduce` the `@supports` branch is switched off by its inner
+`@media`, the observer short-circuits, and everything is simply visible. Content appears; movement
+does not.
+
+**Stagger** is opt-in per element, from the same token: `<li class="reveal" style="--i:3">`. Cap it
+at about 6 — beyond that the last item in a row is still arriving after the user has started reading
+the next section.
+
+**Support reality, checked August 2026.** Scroll-driven animations (`animation-timeline`, `scroll()`,
+`view()`) are **Baseline: Limited availability**. Chrome/Edge 115+ (Jul 2023) and Safari 26 / iOS 26
+(Sep 2025) ship it; **Firefox does not support it at all** and is the sole blocker on Baseline. So:
+
+- The `@supports` gate is load-bearing, not decoration. Treat scroll-driven CSS as the enhancement
+  and the observer as the real implementation, not the reverse.
+- Never ship a *layout* that only resolves once a scroll-driven animation runs (sticky-scrubbed
+  sections, pinned diagrams that depend on `animation-range`). In Firefox they will not run, and
+  there is no `@supports` rescue for a structure you have already committed to.
+- iOS below 26 has no support either. That is still a meaningful slice of phone traffic in 2026, and
+  those are the users who most need the observer path to work.
+
+The CSS and JS above were run together in Chromium across all six combinations that matter. This is
+the table to reproduce if you change any of it — `opacity` of three stacked full-height sections,
+sampled at the top of the page and again after scrolling to the bottom:
+
+| Engine | JS | Motion pref | At top | After scroll |
+|---|---|---|---|---|
+| scroll-driven supported | on | no-preference | `1, 0.65, 0` (scrubbing) | `1, 1, 1` |
+| scroll-driven supported | **off** | no-preference | `1, 0.65, 0` | `1, 1, 1` |
+| scroll-driven supported | on | **reduce** | `1, 1, 1` | `1, 1, 1` |
+| **no scroll-driven** (Firefox) | on | no-preference | `1, 1, 0` (observer) | `1, 1, 1` |
+| **no scroll-driven** | on | **reduce** | `1, 1, 1` | `1, 1, 1` |
+| **no scroll-driven** | **off** | no-preference | `1, 1, 1` | `1, 1, 1` |
+
+No row is ever `0` at the bottom of the second column. That is the only property that matters: there
+is no combination of engine, JS and motion preference in which a section stays invisible.
+
 Motion register values by mood, for direct substitution:
 
 | Mood | `--motion-distance` | `--motion-duration` | `--motion-stagger` | `--motion-ease` | `--motion-hover-scale` |
@@ -962,6 +1176,17 @@ Motion register values by mood, for direct substitution:
 | Technical / modern | 14px | 300ms | 60ms | `cubic-bezier(.32,.72,0,1)` | 1.015 |
 | Playful | 28px | 550ms | 70ms | `linear(0,.6 30%,1.05 60%,.98 80%,1)` | 1.05 |
 | Heritage | 12px | 700ms | 120ms | `cubic-bezier(.25,.8,.25,1)` | 1.00 |
+
+`--motion-hover-scale` is meaningless on a touch device and actively harmful there: a tapped
+element keeps `:hover` until the user taps something else, so the card stays enlarged and reads as
+stuck. **Every rule in the build that uses `:hover` goes inside
+`@media (hover: hover) and (pointer: fine)`** — no exceptions, including the ones in §2.4. The
+touch equivalent of a hover state is `:active`, which needs no gate; give touch users that instead
+of nothing.
+
+`linear()` (the Playful easing) is Baseline widely available, but if it ever fails to parse the
+custom property is invalid at computed-value time and the transition silently falls back to `ease`
+— visually duller, never broken.
 
 ---
 
@@ -1019,7 +1244,8 @@ Screenshots: 960px fixed-width centred layout, `#8b5a2b` header bar, tiled wood-
 
 | Element | Found | Q1 | Q2 | Verdict | Action |
 |---|---|---|---|---|---|
-| Brown `#8b5a2b` | Header bar, links, logo | **Yes** — it is on their van | Chose it | **LIFT** | Hue 55.6° is genuinely theirs and stays. But L 0.47 / C 0.087 is muddy at scale and fails AA as link text on white (3.9:1). Re-seat to `#8a5a2c` for the mark, and derive an AA accent at `#7d5127` (4.6:1). |
+| Brown `#8b5a2b` | Header bar, links, logo | **Yes** — it is on their van | Chose it | **KEEP** | Measured, not assumed: OKLCh `L 0.512 / C 0.090 / H 62.2°`, and **5.84:1 on white — it already passes AA**. There is no contrast argument for changing it, so do not invent one. It stays as `--c-brand`. What changes is *where* it goes: a 60px-tall slab of it across the top is 2013; the same brown as the mark, the rules and the accent is the same equity spent better. |
+| Default-blue links `rgb(0,0,238)` | Body copy links | No | **Builder** — that is the unstyled browser default, nobody typed it | **DROP** | The one real colour defect on the site, and it is not the brown. Links move to `--c-accent` (`#7d5127`, 6.82:1 on `--c-surface`). |
 | "Est. 1974" | Footer, 10px grey | **Yes** — 50 years of trading is the single strongest asset on the site | Chose it | **KEEP + promote** | Move to the hero as an eyebrow in `--font-utility`, uppercase, `0.08em` tracking. It was buried because 2013 templates had no place to put it. |
 | Verdana 13px/1.2 | Body copy | No | **Builder** — Verdana was a web-safe default, not a decision | **DROP** | Replaced. Nobody recognises Harrow & Vale by Verdana. |
 | Georgia 22px bold | Headings | No | Builder | **DROP** | Replaced. |
@@ -1036,7 +1262,7 @@ Screenshots: 960px fixed-width centred layout, `#8b5a2b` header bar, tiled wood-
 node palette.mjs "#8a5a2c" "#7d5127" > src/styles/tokens.css
 ```
 
-- Palette: their brown, corrected and split into a recognisable brand tone and an AA-passing accent. Neutral ramp hue-biased to 55.6°, so every surface is warm — `--n-0` lands near `#fffdfa` instead of white, which is exactly the cream the mood register calls for. The tiled wood image is gone but its *warmth* is now in every pixel of the page.
+- Palette: their brown kept as the mark tone and split into a slightly deeper accent for text-sized use. Neutral ramp hue-biased to 62.2°, so every surface is warm — real emitted values: `--n-0: #fffdfb`, `--c-accent: light-dark(#7d5127, #ca996f)`, `--c-brand: light-dark(#8a5a2c, #e0ab7c)`, audit clean in both themes. That is exactly the cream the mood register calls for. The tiled wood image is gone but its *warmth* is now in every pixel of the page.
 - Type: pairing 3 with a heritage lean — **Young Serif** display / **Newsreader** body / **DM Mono** utility. Young Serif's blunt cut terminals echo hand-tooled timber; Newsreader repairs the 13px/1.2 legibility disaster at `--step-0`/1.6.
 - Motion: rustic register — 16px, 800ms, no parallax. A stair rises slowly; so does the page.
 - Photography: their own images, warm grade, native size, editorial grid. Request higher-res originals of the two best staircases for the hero.
@@ -1160,12 +1386,20 @@ Add a check that fails the build rather than trusting yourself to remember:
 
 ```bash
 # guard.sh — run before every delivery. Non-zero exit = do not ship.
-set -e
+set -eu
+
+# Fail loudly if the paths themselves are wrong. Without this, a renamed source directory
+# makes grep find nothing and the guard cheerfully reports "clean" on an unchecked build.
+targets=""
+for p in src index.html public; do [ -e "$p" ] && targets="$targets $p"; done
+[ -n "$targets" ] || { echo "BLOCKED: nothing to scan — check the paths" >&2; exit 1; }
+
+# shellcheck disable=SC2086
 if grep -rInE '(reference-only|unsplash\.com|pexels\.com|images\.pexels|pinimg\.com|cdn\.dribbble)' \
-     src/ index.html 2>/dev/null; then
+     $targets; then
   echo "BLOCKED: reference-only or stock asset referenced in the build" >&2; exit 1
 fi
-echo "asset rights check: clean"
+echo "asset rights check: clean ($targets)"
 ```
 
 ### Placeholder requirements
@@ -1248,7 +1482,11 @@ Contrast audit: {paste the stderr from palette.mjs — both themes, all roles}
 Rationale: {one sentence tying the pairing to the mood and the evidence}
 
 ## 5. Motion budget
-{the token block from §4.3} + prefers-reduced-motion branch: shipped.
+{the token block from §4.3}
+- prefers-reduced-motion branch: shipped
+- IntersectionObserver fallback shipped and verified in a browser without scroll-driven
+  animations (Firefox): yes / no
+- every :hover rule gated on (hover: hover): yes / no
 
 ## 6. Keep / Lift / Drop
 {the §5.1 table, every element, with the Q1/Q2 verdict}
@@ -1266,11 +1504,26 @@ Still needed ({n}): {the placeholder manifest}
 
 ## Sources
 
-- [light-dark() — Web platform features explorer](https://web-platform-dx.github.io/web-features-explorer/features/light-dark/) — Baseline newly available since May 2024; widely available Nov 2026.
-- [Using relative colors — MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Colors/Using_relative_colors) and [CSS relative color syntax — Chrome for Developers](https://developer.chrome.com/blog/css-relative-color-syntax) — Baseline since Sept 2024.
-- [contrast-color() — Web platform features explorer](https://web-platform-dx.github.io/web-features-explorer/features/contrast-color/) and [Interop 2026 — WebKit](https://webkit.org/blog/17818/announcing-interop-2026/) — Chrome 147 (Apr 2026), Firefox 146, Safari 26.0; newly available, not yet widely available.
-- [size-adjust @font-face descriptor — MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/size-adjust) — Baseline widely available since Sept 2023.
+Baseline status re-verified 2026-08-02. "Newly available" means it just landed everywhere;
+"widely available" means 30 months of coverage. Anything below widely available needs a gate.
+
+| Feature | Baseline | Dates | Gate needed? |
+|---|---|---|---|
+| `size-adjust` / metric overrides | **Widely available** | since Sept 2023 | no |
+| `color-mix()` | **Widely available** | since Nov 2025 | no |
+| `light-dark()` | Newly available | 2024-05-13 → widely 2026-11-13 | yes — `@supports not (color: light-dark(#000,#fff))` |
+| Relative colour syntax | Newly available | 2024-09-16 → widely 2027-03-16 | yes — `@supports (color: oklch(from red l c h))` |
+| `contrast-color()` | Newly available | 2026-04-10 → widely 2028-10-10 | yes, and progressive-enhancement only |
+| Scroll-driven animations | **Limited availability** | Chrome 115 (2023-07), Safari 26 (2025-09), **Firefox: none** | yes — plus a working non-CSS fallback |
+
+- [light-dark() — Web platform features explorer](https://web-platform-dx.github.io/web-features-explorer/features/light-dark/) — newly available 2024-05-13; widely available forecast 2026-11-13. Chrome 123, Firefox 120, Safari 17.5.
+- [Relative color syntax — Web platform features explorer](https://web-platform-dx.github.io/web-features-explorer/features/relative-color/) and [Using relative colors — MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Colors/Using_relative_colors) — newly available 2024-09-16; widely available forecast 2027-03-16. Chrome 125, Firefox 128, Safari 18.
+- [contrast-color() — Web platform features explorer](https://web-platform-dx.github.io/web-features-explorer/features/contrast-color/) — newly available 2026-04-10; widely available forecast 2028-10-10. Safari 26 (2025-09-15), Firefox 146 (2025-12-09), Chrome 147 (2026-04-07).
+- [Scroll-driven animations — Web platform features explorer](https://web-platform-dx.github.io/web-features-explorer/features/scroll-driven-animations/) — **Limited availability.** Chrome/Edge 115 (2023-07), Safari + iOS 26 (2025-09-15). Not implemented in Firefox; Firefox has been the sole Baseline blocker since Sept 2025.
+- [size-adjust @font-face descriptor — MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/size-adjust) — Baseline widely available, across browsers since Sept 2023.
 - [oklch() — MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/oklch)
 - Fontsource API (`api.fontsource.org/v1/fonts/{id}`, `/v1/variable/{id}`) — licence, variable status and axis ranges verified live for every pairing listed in §3.2.
-- Package versions verified against the npm registry: `node-vibrant@4.0.4`, `colorthief@3.4.0`, `sharp@0.35.3`, `playwright@1.62.1`, `fonttools@4.63.0`.
+- Package versions are a moving target and are stated as "known good at time of writing", not as pins: `node-vibrant@4`, `colorthief@3`, `sharp@0.35`, `fonttools@4.6x`. Print the installed Playwright version rather than assuming one (§1.0).
+- `palette.mjs` in §2.3 was extracted from this file and executed. Every hex and every contrast ratio quoted in §2.3 and §5.2 is that script's real stdout/stderr, not an estimate. It was additionally run against `#ffffff`, `#000000`, a pale yellow (`#f5e050`), and a saturated blue/red pair; no role failed its target in either theme in any case.
+- The reveal system in §4.3 was assembled from this file's own code blocks and driven in Chromium under six engine/JS/motion-preference combinations; the results table in §4.3 is that run.
 ```

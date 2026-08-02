@@ -2,7 +2,12 @@
 
 What concretely makes a website read as **expensive**, expressed as numbers you can check — not adjectives.
 Companion to `scroll-effects.md` (motion recipes) and `hover-effects.md` (micro-interaction recipes).
-**Verified 2026-08-02.** Every measurement below is either extracted from a live premium site's shipped CSS (sources in §7) or checkable with a ruler on a rendered page.
+**Verified 2026-08-02.** Every measurement below is either extracted from a live premium site's shipped CSS (sources in §7), computed (contrast ratios in §1.6), or checkable with a ruler on a rendered page.
+
+Two classes of claim have different reliability, and you should treat them differently:
+
+- **Browser-support numbers (§0.2)** come from MDN browser-compat-data and are exact. Re-check them against BCD (§7, row 15) before relying on them — they move.
+- **Numbers quoted from named sites' shipped CSS** (§1.2, §1.5, §1.6) were read on the date above from hashed build assets. Those filenames change on every deploy, so the *specific* values may drift. What does not drift is the pattern they demonstrate — one or two easing curves, a huge display-to-body ratio, a five-token palette. Trust the pattern; re-read the site if you need the literal number.
 
 ---
 
@@ -19,18 +24,25 @@ Run §6 before you tell the user the page is done. It is pass/fail, not vibes.
 
 A cheap site has 6 fonts, 9 colours, 14 animations, 40 rounded cards and a gradient. An expensive site has 2 fonts, 3 colours, 6 animated moments, one repeated crop ratio and a lot of empty paper. The expensive one is *harder*, because with nothing to hide behind, every measurement shows.
 
-### 0.2 Browser facts this file depends on (checked today, not from a 2024 post)
+### 0.2 Browser facts this file depends on
 
-| Feature used below | Status 2026-08-02 |
-|---|---|
-| `text-wrap: balance` | **Widely available** — Chrome 130+, Safari 17.5+, Firefox 121+, ~89.9% global (caniuse) |
-| `text-wrap: pretty` (`text-wrap-style`) | **Baseline newly available** since Oct 2024 (MDN). Safe with graceful degradation — unsupported browsers just wrap normally |
-| `animation-timeline: scroll()` / `view()` | **Limited availability, NOT Baseline** (MDN). Firefox stable does not ship it. Always `@supports`-guarded, always with a complete un-enhanced base layer |
-| View Transitions API (same-document) | Chrome 111+, Safari 18+, Firefox 144+, ~88.5% global (caniuse) — enhancement only |
-| `aspect-ratio`, `clip-path`, `position: sticky`, `IntersectionObserver`, `prefers-reduced-motion`, `object-fit`/`object-position`, `font-variation-settings`, `@font-face` `size-adjust` | **Widely available** — use freely |
-| `letter-spacing`, `font-feature-settings` (`ss01`, `pnum`, `tnum`, `case`) | **Widely available** |
+Version numbers below are from **MDN browser-compat-data (BCD), read 2026-08-02**. They are the checkable form of the claim — prefer them to global-percentage figures, which drift and are easy to quote wrongly.
 
-Sources: MDN `animation-timeline` (Limited availability, explicitly "not Baseline"), MDN `text-wrap-style` (Baseline newly available Oct 2024), caniuse `css-text-wrap-balance` (89.86%), caniuse `view-transitions` (88.46%).
+| Feature used below | First stable support | Verdict |
+|---|---|---|
+| `text-wrap: balance` | Chrome **114**, Firefox **121**, Safari **17.5** | **Ship unguarded.** Degrades to normal wrapping |
+| `text-wrap: pretty` | Chrome **117**, Safari **26**, **Firefox: not supported in any version** | **Not Baseline. Progressive polish only** — see the warning below |
+| `text-wrap-style` property (`auto`/`balance`/`stable`) | Chrome 130, Firefox 124, Safari 17.5 | Baseline newly available (Oct 2024). Note this is the *property*, and its Baseline status does **not** extend to the `pretty` value |
+| `animation-timeline: scroll()` / `view()` | Chrome **115**, Safari **26**, **Firefox: Nightly preview only, not stable** | **Limited availability, not Baseline.** Always `@supports`-guarded, always over a complete un-enhanced base layer |
+| View Transitions API (same-document) | Chrome **111**, Safari **18**, Firefox **144** | Enhancement only, never load-bearing |
+| `hanging-punctuation` | **Safari 26.5 only** — not in Chrome or Firefox | Cosmetic nicety. Never let layout depend on it |
+| `aspect-ratio`, `clip-path`, `position: sticky`, `IntersectionObserver`, `prefers-reduced-motion`, `object-fit`/`object-position`, `font-variation-settings`, `font-synthesis-weight`, `@font-face` `size-adjust`, `letter-spacing`, `font-feature-settings`, `font-variant-numeric` | all shipped across Chrome/Firefox/Safari for years | **Widely available** — use freely |
+
+> **Correction worth internalising, because it is the mistake this file previously made:**
+> `text-wrap: pretty` is routinely described as "Baseline since Oct 2024". That is false. What went Baseline in Oct 2024 is the **`text-wrap-style` property**, whose `auto`/`balance`/`stable` values are broadly supported. The **`pretty` value has never shipped in Firefox** and only reached Safari in 26.
+> Consequence for this file: `pretty` is a *bonus*, not a mechanism. The no-orphans requirement in §6B must be met structurally — by controlling `max-width` in `ch` and by non-breaking spaces — because roughly a Firefox-shaped slice of your visitors will never receive `pretty` at all.
+
+> **Second correction:** `animation-timeline` is often written off as "Chrome-only". As of Safari 26 that is out of date — Chrome, Edge and Safari all ship it; **Firefox is the sole stable holdout.** It is still *Limited availability / not Baseline*, so the `@supports` guard in §3.4 stays mandatory. But the enhanced tier now reaches most visitors, which is why it is worth writing properly rather than skipping.
 
 ---
 
@@ -45,18 +57,19 @@ Whitespace is the most expensive thing on a page because it is literally unsold 
 | Measurement | Cheap | Expensive | How to check |
 |---|---|---|---|
 | Section vertical padding (desktop) | 40–64px | **112–208px** (`clamp(5rem, 11vw, 13rem)`) | Measure gap between last baseline of section A and first of section B |
-| Section padding : body font-size ratio | 3–4× | **7–12×** | padding ÷ 17px |
+| Section padding : body font-size ratio | 3–4× | **7–12×**, *measured at ≥1280px* | padding ÷ 17px. At 390px the same clamp yields ~4.7× — that is correct, not a failure; this ratio is a desktop test |
 | Hero: % of viewport covered by ink (text + UI, not photo) | 45–70% | **12–25%** | Screenshot, eyeball the text block bounding box |
 | Page gutter (desktop) | 16–24px | **48–96px**, and *asymmetric* is fine | Left edge of content to viewport edge |
 | Space above a heading : space below it | 1:1 | **2.5:1 to 3:1** — headings belong to what follows | `margin-block: 3em 1.1em` on the h2 |
 | Gap between grid items | 16px | **24–48px column, 64–96px row** — row gap always > column gap | Inspect `gap` |
-| Distinct spacing values on the whole page | 11+ ad-hoc | **6, from one scale** | Count unique padding/margin values |
+| Distinct spacing values on the whole page | 11+ ad-hoc | **≤7 scale steps, and zero off-scale values** | Count unique padding/margin values, then subtract the ones that resolve to a token. The number that must be **zero** is the off-scale ones |
 
 **The rule:** vertical rhythm comes from **one** scale, and the biggest step is at least 8× the smallest. Anything not on the scale is a bug.
 
 ```css
 :root {
-  /* One spacing scale. 6 steps. Nothing off-scale is allowed anywhere on the page. */
+  /* One spacing scale. 7 steps, and nothing off-scale ships. The count that
+     matters is the off-scale one, and it must be zero. */
   --space-3xs: 0.5rem;    /*  8px — inside chips, icon gaps                */
   --space-2xs: 0.75rem;   /* 12px — label to value                         */
   --space-xs:  1.25rem;   /* 20px — paragraph rhythm                       */
@@ -69,12 +82,18 @@ Whitespace is the most expensive thing on a page because it is literally unsold 
   --gutter: clamp(1.25rem, 5vw, 6rem);
 }
 
-.section {
-  padding-block: var(--space-l);
-  padding-inline: var(--gutter);
-}
+/* ONE system owns the inline gutter, and it is the grid in §1.3 (its first and
+   last track ARE the gutter). So .section handles BLOCK padding only.
+   Applying padding-inline here as well would double the gutter — that is the
+   single most common way this scale gets broken in practice. */
+.section { padding-block: var(--space-l); }
 
-/* Headings own the space BELOW them, not above. This one ratio does a lot of work. */
+/* Only for a section that is NOT a .grid child — e.g. a plain full-width band. */
+.section--ungridded { padding-inline: var(--gutter); }
+
+/* Headings own the space BELOW them, not above. This one ratio does a lot of work.
+   Note both rules are specificity (0,1,1); the second wins on source order, so
+   keep them adjacent and in this order. */
 .section h2 { margin-block: 0 var(--space-xs); }
 .section > * + h2 { margin-block-start: var(--space-m); }
 ```
@@ -119,7 +138,7 @@ Lusion ships `clamp(7em, 8vw, 20em)` on its display type — an em-relative gian
 }
 ```
 
-**The measurable test:** `--step-4 ÷ --step-0` at desktop must be **≥ 4.5**. Under 3.5 and the page reads as a template.
+**The measurable test:** `--step-4 ÷ --step-0` at desktop (≥1280px) must be **≥ 4.5**. Below that it reads as a template — and treat 3.5–4.5 as failing too, not as a grey zone. With the tokens above: 105 ÷ 19 = **5.5**.
 
 ### 1.3 Grid discipline
 
@@ -134,15 +153,21 @@ Lusion ships `clamp(7em, 8vw, 20em)` on its display type — an em-relative gian
 The tell is not "does it have a grid" — it is **does the same left edge recur down the page**. Put a straightedge on a screenshot: on an expensive site, headings, body, eyebrows and captions all snap to 2–3 x-positions. On a cheap one they snap to none.
 
 ```css
-/* ONE grid. Declared once. Every section is a child of it or re-declares it identically. */
+/* ONE grid. Declared once. Every section is a child of it or re-declares it identically.
+   The first and last tracks ARE the page gutter — so do not also put padding-inline
+   on .section (see §1.1). One system owns the inline space. */
 .grid {
   display: grid;
   grid-template-columns:
     var(--gutter)
     repeat(12, minmax(0, 1fr))
     var(--gutter);
-  column-gap: clamp(1rem, 2vw, 2rem);
+  column-gap: clamp(1rem, 2vw, 2rem);   /* 16→32px */
+  row-gap: var(--space-m);              /* 64px — row gap ALWAYS exceeds column gap (§1.1) */
 }
+
+/* Default span. Specificity (0,1,0) — identical to the .span-* classes below, so
+   this rule MUST stay above them or the overrides silently stop working. */
 .grid > * { grid-column: 2 / -2; }               /* default: full content width */
 
 /* The ONLY three spans allowed on this page. Adding a fourth requires a reason. */
@@ -151,8 +176,10 @@ The tell is not "does it have a grid" — it is **does the same left edge recur 
 .span-bleed  { grid-column: 1 / -1; }            /* imagery only                */
 
 @media (max-width: 48rem) {
-  /* Mobile-first truth: the grid collapses, the rhythm does not. */
+  /* The grid collapses, the rhythm does not. --gutter has already shrunk to
+     ~1.25rem via its own clamp, so the edge tracks stay correct without help. */
   .span-prose, .span-offset { grid-column: 2 / -2; }
+  .grid { row-gap: var(--space-s); }
 }
 ```
 
@@ -191,17 +218,39 @@ This is where a real business's own photos either sell them or sink them. The cl
   display: block;
 
   /* ONE grade across every photo on the site. Unifies mixed-quality client material.
-     Keep it subtle: if you can see the filter, it is too strong. */
+     Keep it subtle: if you can see the filter, it is too strong.
+     This is a STATIC filter — fine. Animating filter is what §6C forbids. */
   filter: saturate(0.92) contrast(1.04);
 }
 
-/* Scrim only where text sits over image — a gradient, never a flat 50% black box. */
+/* Scrim only where text sits over image — a gradient, never a flat 50% black box.
+   Complete recipe: positioned parent, scrim, and a slot for the text. Without the
+   caption rule the scrim darkens a photo for no reason. */
+.figure--overlay { position: relative; }
 .figure--overlay::after {
   content: "";
   position: absolute; inset: 0;
   background: linear-gradient(to top, rgb(0 0 0 / 0.55), rgb(0 0 0 / 0) 55%);
+  pointer-events: none;              /* never eat clicks on a link underneath */
 }
-.figure--overlay { position: relative; }
+.figure--overlay > figcaption {
+  position: absolute;
+  inset-block-end: var(--space-s);
+  inset-inline: var(--space-s);
+  z-index: 1;                        /* above the ::after scrim */
+  color: #fff;                       /* on a scrim, not on --paper — this is the
+                                        one place a literal white is correct */
+  max-width: 34ch;
+}
+```
+
+Markup this expects — the CSS does nothing without it:
+
+```html
+<figure class="figure figure--wide figure--overlay" style="--focal: 62% 35%">
+  <img src="/img/workshop.jpg" alt="Bench joiner fitting a mortise by hand" width="1600" height="900" loading="lazy" decoding="async">
+  <figcaption>Bench shop, Hunslet</figcaption>
+</figure>
 ```
 
 **Measurable test:** count distinct `aspect-ratio` values in the stylesheet. More than 3 → fail.
@@ -272,27 +321,39 @@ By-Kin's shipped palette is exactly this: `--black`, `--white`, `--dark #111214`
 
 ```css
 :root {
-  /* 2 neutrals + 3 derived steps + 1 accent. That is the whole palette.
-     Note: no pure #000 and no pure #fff — both read as "unconsidered". */
-  --ink:      #14150f;   /* near-black, warm-shifted                         */
-  --ink-2:    #55564f;   /* body copy on paper — NOT a lighter tint of --ink */
-  --ink-3:    #9a9a93;   /* captions, meta, rules                            */
-  --paper:    #f6f4ef;   /* warm paper                                        */
-  --paper-2:  #e9e6de;   /* alternating section / image placeholder           */
-  --accent:   #7a2c1f;   /* ONE. Appears on links and the primary CTA only.  */
+  /* 2 neutrals + 3 derived steps + 1 accent, plus one non-text hairline.
+     No pure #000 and no pure #fff — both read as "unconsidered".
+     Every ratio below is measured against --paper and stated so you can re-check it. */
+  --ink:      #14150f;   /* near-black, warm-shifted            — 16.70:1 on paper */
+  --ink-2:    #55564f;   /* body copy — NOT a lighter tint of --ink —  6.75:1     */
+  --ink-3:    #6f6f68;   /* captions, meta, eyebrows            —  4.60:1  PASSES */
+  --paper:    #f6f4ef;   /* warm paper                                            */
+  --paper-2:  #e9e6de;   /* alternating section / image placeholder               */
+  --accent:   #7a2c1f;   /* ONE. Links and the primary CTA only. —  8.65:1        */
+
+  /* Hairlines are NOT text and are exempt from 4.5:1. Derived, so it is not a
+     seventh decision — it is --ink at low alpha. */
+  --rule: color-mix(in srgb, var(--ink) 16%, transparent);
 
   color-scheme: light dark;   /* respect the OS; see the dark block below */
 }
 
-/* Dark register — same 6 tokens, re-pointed. Do not add colours here. */
+/* Dark register — same tokens, re-pointed. Do not add colours here. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --ink: #f2efe8; --ink-2: #b5b2aa; --ink-3: #7b7871;
+    --ink: #f2efe8;        /* 16.06:1 on dark paper */
+    --ink-2: #b5b2aa;      /*  8.71:1               */
+    --ink-3: #85827a;      /*  4.81:1  PASSES       */
     --paper: #141412; --paper-2: #1e1e1b;
-    --accent: #d98a6a;   /* lifted for contrast on dark; still the same hue  */
+    --accent: #d98a6a;     /*  6.85:1 — lifted for dark; still the same hue */
+    --rule: color-mix(in srgb, var(--ink) 20%, transparent);
   }
 }
 ```
+
+> **Why `--ink-3` is `#6f6f68` and not the prettier `#9a9a93`:** `#9a9a93` on `#f6f4ef` is **2.58:1** — and the matching dark-mode value `#7b7871` was **4.19:1**, so it failed in *both* schemes. It is the shade every generated palette reaches for, it looks right in a screenshot, and it fails WCAG AA outright. Because §2.3 uses `--ink-3` for eyebrows, captions and section-intro copy — all of it *text* — that one token failing takes a third of the page's type below AA. If you want the airier grey, you may use it **only** for genuine non-text furniture (hairlines, dividers), which is what `--rule` exists for.
+>
+> Re-derive these ratios yourself whenever you change a token. A palette that has not been contrast-checked is not a palette, it is a mood.
 
 **Measurable test:** screenshot the page, posterise it, count hues. More than 2 chromatic hues → fail. Accent covering more than ~3% of the pixels → fail.
 
@@ -315,7 +376,7 @@ The reason is attention economics: if everything moves, nothing is emphasised, a
 
 These take minutes and are almost never present on template sites:
 
-- **Optical alignment of quotes and punctuation** — hanging punctuation: `hanging-punctuation: first last;` (Safari; harmless elsewhere).
+- **Optical alignment of quotes and punctuation** — `hanging-punctuation: first last;`. **Safari 26.5 only** (not Chrome, not Firefox). Purely additive: nothing shifts where it is unsupported, so it is safe to ship and pointless to rely on.
 - **Tabular figures in prices/specs**: `font-variant-numeric: tabular-nums;` so columns line up.
 - **Real typographic characters**: `—` `–` `’` `“ ”` `×` `№` — never `-`, `'`, `"`.
 - **Non-breaking spaces** before units and after short prepositions: `24 kg`, `Est. 1974`.
@@ -326,23 +387,42 @@ These take minutes and are almost never present on template sites:
 
 ```css
 ::selection { background: var(--ink); color: var(--paper); }
-:where(a, button, [tabindex]):focus-visible {
+
+/* NOT wrapped in :where(). :where() contributes zero specificity, which would make
+   this ring trivially clobbered by any later component rule — the opposite of what
+   you want from a focus indicator. Keep it as a real selector.
+   Also: do NOT set border-radius here. A focus rule has no business changing the
+   element's geometry; `outline` already follows the element's own radius. */
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible,
+:is(input, select, textarea, summary):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
-  border-radius: 1px;
 }
-html { scroll-padding-block-start: 6rem; -webkit-text-size-adjust: 100%; }
+
+html {
+  scroll-padding-block-start: 6rem;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;            /* standard property, not just the -webkit- one */
+}
 .price, .spec td { font-variant-numeric: tabular-nums; }
-blockquote { hanging-punctuation: first last; }
+blockquote { hanging-punctuation: first last; }   /* Safari 26.5 only; additive */
+
+/* Hairlines use --rule, never --ink-3. A divider is not text and is exempt from
+   4.5:1 — but if you draw it with a text token you will eventually be tempted to
+   set caption copy in that same too-light grey (§1.6). Keep them separate. */
+hr, .rule { border: 0; border-block-start: 1px solid var(--rule); margin: 0; }
 ```
 
 ### 1.9 Summary scorecard
 
 | Axis | Fail | Pass |
 |---|---|---|
-| Section padding ÷ body size | < 5 | **≥ 7** |
-| Display ÷ body size | < 3.5 | **≥ 4.5** |
-| Distinct spacing values | > 8 | **≤ 6** |
+| Section padding ÷ body size *(at ≥1280px)* | < 7 | **≥ 7** |
+| Display ÷ body size *(at ≥1280px)* | < 4.5 | **≥ 4.5** |
+| Off-scale spacing values (not resolving to a token) | ≥ 1 | **0** |
+| Spacing scale steps | > 7 | **≤ 7** |
 | Distinct aspect ratios | > 3 | **≤ 3** |
 | Chromatic hues | > 2 | **≤ 2** |
 | Easing curves in stylesheet | > 3 | **≤ 3** |
@@ -357,14 +437,13 @@ If you only get one thing right, get this. **Typography is 70% of perceived spen
 
 ### 2.1 What premium sites do that templates do not
 
-1. **They pay for, or carefully choose, a display face with character** — and then use it at sizes where that character is visible (55px+). A template uses one neutral sans at 32px and the character never shows.
-2. **They set a huge size gap between display and body** (§1.2) and refuse to fill it in.
-3. **They put negative tracking on large type and positive tracking on small caps.** Templates leave `letter-spacing` at 0 everywhere. Lusion ships exactly this: `letter-spacing: -.02em` on display, `.125em` on caps labels.
-4. **They control measure.** Body copy never exceeds ~70 characters. Templates let it run 120ch on a wide monitor.
-5. **They vary line-height by role, aggressively.** ALS ships `1.47` for body but `1.0` for display; By-Kin ships `100%` / `115%` / `130%`; Locomotive uses `1.2` on 51 rules. Templates use `1.5` for everything.
-6. **They avoid orphans and ragged headline breaks** with `text-wrap: balance` / `pretty`.
-7. **They align to a shared left edge** so type creates architecture, not just content.
-8. **They use one weight per role and hold it** — not `font-weight: 600` sprinkled ad hoc.
+The numbers are all in §2.2 — this is the *evidence* that those numbers are what shipped sites actually do, plus the three habits that have no number.
+
+- **Tracking is set, not defaulted.** Lusion ships `letter-spacing: -.02em` on display and `.125em` on caps labels. Templates leave it at `0` everywhere, which is the single most detectable typographic tell.
+- **Line-height varies by role, aggressively.** ALS: `1.47` body, `1.0` display. By-Kin: `100%` / `115%` / `130%`. Locomotive: `1.2` on 51 separate rules — a house value, not a per-component decision. Templates use `1.5` for everything.
+- **A display face with actual character, used at a size where the character shows** (55px+). A neutral sans at 32px could be any of a thousand fonts, which is the point of a template and the death of a register.
+- **One weight per role, held.** Not `font-weight: 600` sprinkled wherever something needs to feel important.
+- **A shared left edge**, so type builds architecture rather than just filling a column (§1.3).
 
 ### 2.2 Numbers
 
@@ -388,19 +467,54 @@ If you only get one thing right, get this. **Typography is 70% of perceived spen
 ```css
 /* ── Fonts ───────────────────────────────────────────────────────────────────
    TWO families maximum. One display, one text. If budget is zero, a single
-   well-chosen variable face at two optical sizes beats two mediocre free ones.
-   size-adjust normalises the fallback so there is no layout shift on swap. */
+   well-chosen variable face at two optical sizes beats two mediocre free ones. */
+
+/* The real faces. */
 @font-face {
   font-family: "Display";
   src: url("/fonts/display.woff2") format("woff2");
   font-weight: 300 600;              /* variable range */
+  font-style: normal;
   font-display: swap;
-  size-adjust: 100%;
+}
+@font-face {
+  font-family: "Text";
+  src: url("/fonts/text.woff2") format("woff2");
+  font-weight: 300 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* The metric-matched FALLBACKS. This is where size-adjust belongs.
+   size-adjust on the real webfont (a mistake worth naming, because it looks
+   plausible and does nothing useful) just rescales your own font. To kill the
+   swap reflow you must declare a SECOND @font-face that aliases a LOCAL font
+   and adjust THAT to match your webfont's metrics.
+   Derive the percentages per font — do not copy these numbers blind. Tools:
+   Malte Ubl's fontpie, or the `fontaine` / `next/font` metric tables. */
+@font-face {
+  font-family: "Text fallback";
+  src: local("Segoe UI"), local("Roboto"), local("Helvetica Neue"), local("Arial");
+  size-adjust: 102.5%;               /* per-font: measure, don't guess */
+  ascent-override: 92%;              /* Safari ignores ascent-override; size-adjust
+                                        alone still removes most of the shift */
+  descent-override: 24%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Display fallback";
+  src: local("Iowan Old Style"), local("Palatino Linotype"), local("Georgia");
+  size-adjust: 96%;
+  ascent-override: 90%;
+  descent-override: 22%;
+  line-gap-override: 0%;
 }
 
 :root {
-  --font-display: "Display", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  --font-text: "Text", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Fallback face sits BETWEEN the webfont and the generic stack, so the
+     unstyled-to-styled swap barely moves. */
+  --font-display: "Display", "Display fallback", Georgia, serif;
+  --font-text: "Text", "Text fallback", ui-sans-serif, system-ui, sans-serif;
 
   /* Tracking tokens — see §2.2. Tracking is a design decision, not a default. */
   --track-display: -0.028em;
@@ -418,8 +532,19 @@ body {
   color: var(--ink-2);
   background: var(--paper);
   font-synthesis-weight: none;        /* never fake-bold a variable font */
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+
+  /* Deliberately NOT set here:
+     - `text-rendering: optimizeLegibility` — cargo cult. It buys nothing modern
+       browsers don't already do, and has a history of perf and shaping bugs.
+     - `-webkit-font-smoothing: antialiased` — it does not "sharpen" type, it
+       thins strokes on macOS/WebKit only. On light paper with a 400-weight text
+       face it costs you legibility and contrast. Apply it, if at all, ONLY to
+       light-on-dark blocks where the stroke gain is real. */
+}
+
+/* The narrow, defensible use of smoothing: light text on a dark surface. */
+@media (prefers-color-scheme: dark) {
+  body { -webkit-font-smoothing: antialiased; }
 }
 
 /* ── Roles ───────────────────────────────────────────────────────────────── */
@@ -447,12 +572,23 @@ h2 {
   margin: 0;
 }
 
+h3 {
+  font-family: var(--font-display);
+  font-size: var(--step-2);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-wrap: balance;
+  margin: 0;
+}
+
 .lede {
   font-size: var(--step-1);
   line-height: 1.4;
   max-width: 56ch;
   color: var(--ink-2);
-  text-wrap: pretty;                  /* Baseline since Oct 2024; kills orphans */
+  text-wrap: pretty;                  /* bonus only — no Firefox support (§0.2) */
 }
 
 .prose p {
@@ -482,28 +618,39 @@ h2 {
 ### 2.4 Balance and wrap — set these explicitly
 
 ```css
-/* Headings: equalise line lengths, ≤6 lines (Chromium) / ≤10 (Firefox). */
+/* Headings: equalise line lengths. Chrome 114+, Firefox 121+, Safari 17.5+ —
+   ship unguarded. Capped at 6 lines (Chromium) / 10 (Firefox); beyond that it
+   silently does nothing, which is why it belongs on headings, not paragraphs. */
 h1, h2, h3, .display, blockquote, figcaption { text-wrap: balance; }
 
-/* Body: slower algorithm, minimises orphans. Baseline newly available Oct 2024. */
+/* Body: minimises orphans. Chrome 117+, Safari 26+. NO FIREFOX SUPPORT AT ALL.
+   Treat as polish for some visitors, never as your orphan strategy. */
 p, li, dd, .lede { text-wrap: pretty; }
 
-/* Keep two-word phrases together where a break would read badly. */
-.nowrap { white-space: nowrap; }   /* e.g. <span class="nowrap">£1 200</span> */
+/* The orphan strategy that actually works everywhere: bind the words that must
+   not separate. This is what carries Firefox, and it is what §6B is testing. */
+.nowrap { white-space: nowrap; }   /* e.g. <span class="nowrap">£1&nbsp;200</span> */
 ```
 
-Note the practical limit: `balance` is capped at 6 lines in Chromium, 10 in Firefox, so it works on headings and fails silently on paragraphs — which is exactly why `pretty` is the body-copy answer.
+**Do not let `pretty` become load-bearing.** The split above is often justified as "`balance` for headings, `pretty` for body, job done" — but `pretty` has never shipped in Firefox, so a real slice of visitors get plain wrapping on every paragraph. Orphan control that must hold has to come from **measure** (`max-width` in `ch`, §2.2) and from **`&nbsp;`** between the last two words of short critical strings — headlines, CTA labels, pull-quotes. `pretty` then improves the result for Chromium and Safari users on top of a page that was already correct without it.
 
 ### 2.5 Type-driven hierarchy without decoration
 
 The premium move is to build hierarchy from **size, weight, colour and space** — and stop. No underlines-as-decoration, no coloured heading text, no icon before every heading, no left border bar.
 
 ```css
-/* A section header, complete. Three elements, no ornament. */
+/* A section header, complete. Three elements, no ornament.
+   .eyebrow and h2 are already fully specified in §2.3 — nothing to add here. */
 .section-head { display: grid; gap: var(--space-2xs); max-width: 44ch; }
-.section-head .eyebrow { /* handled above */ }
-.section-head h2       { /* handled above */ }
-.section-head p        { color: var(--ink-3); max-width: 46ch; text-wrap: pretty; }
+.section-head p { color: var(--ink-3); max-width: 46ch; text-wrap: pretty; }
+```
+
+```html
+<div class="section-head">
+  <p class="eyebrow">Workshop</p>
+  <h2>Every carcass cut, jointed and finished in Hunslet</h2>
+  <p>No flat-pack, no outsourcing, no imported components.</p>
+</div>
 ```
 
 ---
@@ -552,10 +699,35 @@ The premium move is to build hierarchy from **size, weight, colour and space** �
 | Underline draw | 240–320ms | `--ease-out` | `scaleX` from `transform-origin` |
 | Element entrance | 500–600ms | `--ease-out` | 16–24px |
 | Section reveal | 800–1000ms | `--ease-soft` | 24–40px |
-| Image mask wipe | 900–1200ms | `--ease-soft` | `clip-path` inset 100%→0 |
+| Image mask wipe | 900–1200ms | `--ease-soft` | **transform on an inner wrapper** (default) or `clip-path` inset 100%→0 (see note) |
 | Menu open/close | 500–700ms | `--ease-inout` | — |
 | Stagger step | 60–90ms | — | — |
 | Scroll-scrubbed | n/a | `linear` | ≤ 15% of viewport |
+
+**The `clip-path` exception, stated honestly.** `clip-path` is *not* a compositor-only property — animating it re-rasterises each frame, which is why §6C's "transform and opacity only" rule exists. The reveal below gets the identical look from two transforms and stays on the compositor. Reach for animated `clip-path` only for the **one** hero-scale moment, on **one** element, never on a staggered grid of images.
+
+```css
+/* Mask wipe, compositor-safe. The mask slides one way, the image slides back
+   less far — the parallax inside the wipe is what makes it read expensive.
+   Base layer first: with no JS and no motion permission, this is just an image. */
+.wipe { position: relative; overflow: hidden; }   /* no clip-path needed */
+.wipe > img { display: block; width: 100%; height: auto; }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The mask panel only exists where motion is allowed, so it can never
+     leave a paper-coloured rectangle sitting over the photo. */
+  .wipe::before {
+    content: ""; position: absolute; inset: 0; z-index: 1;
+    background: var(--paper);
+    transform: translateY(-101%);                 /* resting state: out of the way */
+  }
+  .wipe.is-in::before { animation: wipe-mask var(--dur-reveal) var(--ease-soft) both; }
+  .wipe.is-in > img   { animation: wipe-img  var(--dur-reveal) var(--ease-soft) both; }
+}
+
+@keyframes wipe-mask { from { transform: translateY(0);   } to { transform: translateY(-101%); } }
+@keyframes wipe-img  { from { transform: translateY(12%); } to { transform: none; } }
+```
 
 ### 3.3 The moment budget
 
@@ -592,14 +764,43 @@ The reduced-motion page is not a degraded page. It is the same page with the mov
 
 /* But brakes alone leave elements stuck at their "from" state if you were sloppy.
    The correct pattern: only ever apply the hidden state INSIDE a no-preference query. */
+```
+
+**One hook, three tiers.** The reveal system below uses a single markup attribute, `[data-reveal]`, for all of it. Use exactly one name — the common failure is a file that hides with `.reveal`, animates with `[data-reveal]` and toggles `.is-in`, so nothing ever connects and every element stays at `opacity: 0`.
+
+```css
+/* ── Tier 1: no JS, no scroll-timeline support, or reduced motion ─────────────
+   Nothing to declare. [data-reveal] elements are plain, visible content.
+   This is the base layer and it must be complete on its own (§1.7). */
+
+/* ── Tier 2: CSS scroll-driven. Chrome 115+, Safari 26+. Not Firefox (§0.2) ── */
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
-    .reveal {
-      opacity: 0;                       /* safe: only browsers that will un-hide it */
+    [data-reveal] {
+      opacity: 0;                       /* safe: only browsers that WILL un-hide it */
       animation: rise-in linear both;
+      /* animation-timeline MUST come after the `animation` shorthand — the
+         shorthand resets it to `auto` and would silently kill the effect. */
       animation-timeline: view();
       animation-range: entry 15% cover 38%;
     }
+  }
+}
+
+/* ── Tier 3: JS IntersectionObserver, for browsers without scroll timelines ───
+   Guarded by the SAME @supports, negated, so tiers 2 and 3 can never both fire. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports not (animation-timeline: view()) {
+    [data-reveal] {
+      opacity: 0;
+      transition:
+        opacity var(--dur-reveal) var(--ease-soft),
+        transform var(--dur-reveal) var(--ease-soft);
+      transform: translate3d(0, var(--rise), 0);
+    }
+    [data-reveal].is-in { opacity: 1; transform: none; }
+    /* Stagger siblings without a per-element rule: set --i in markup. */
+    [data-reveal].is-in { transition-delay: calc(var(--i, 0) * var(--stagger)); }
   }
 }
 
@@ -609,29 +810,82 @@ The reduced-motion page is not a degraded page. It is the same page with the mov
 }
 ```
 
-Matching JS guard (pairs with the IntersectionObserver tier in `scroll-effects.md`):
+Matching JS (pairs with the IntersectionObserver tier in `scroll-effects.md`):
 
 ```js
 // Single source of truth for motion permission. Reacts to live OS changes.
 const motionOK = window.matchMedia('(prefers-reduced-motion: no-preference)');
 
+// If the browser drives reveals in CSS (tier 2), JS must stay out of it entirely.
+const cssDrivesReveals = CSS.supports('animation-timeline: view()');
+
+let io = null;
+
 function enhance() {
-  if (!motionOK.matches) return;                 // do nothing; base page is complete
-  const io = new IntersectionObserver((entries) => {
+  // Tear down first, so repeated calls cannot leak observers or double-observe.
+  if (io) { io.disconnect(); io = null; }
+  if (cssDrivesReveals || !motionOK.matches) return;  // base page is already complete
+
+  io = new IntersectionObserver((entries, observer) => {
     for (const e of entries) {
       if (!e.isIntersecting) continue;
-      e.target.classList.add('is-in');           // one-shot: never re-trigger
-      io.unobserve(e.target);
+      e.target.classList.add('is-in');       // one-shot: never re-trigger
+      observer.unobserve(e.target);          // use the passed observer, not a closure
     }
   }, { rootMargin: '0px 0px -12% 0px', threshold: 0.15 });
 
-  document.querySelectorAll('[data-reveal]').forEach((el) => io.observe(el));
+  for (const el of document.querySelectorAll('[data-reveal]:not(.is-in)')) io.observe(el);
 }
+
 enhance();
 motionOK.addEventListener('change', enhance);
 ```
 
-### 3.5 When a library is justified
+```html
+<!-- The only markup this needs. --i is optional and only drives stagger. -->
+<article data-reveal style="--i: 0">…</article>
+<article data-reveal style="--i: 1">…</article>
+<article data-reveal style="--i: 2">…</article>
+```
+
+Three things above are the ones people get wrong, so they are worth stating plainly: `animation-timeline` **must** follow the `animation` shorthand or the shorthand resets it; the JS tier **must** be suppressed where CSS already handles it, or supported browsers run both; and the hidden `opacity: 0` state **must** live inside `prefers-reduced-motion: no-preference`, or reduced-motion users get a blank page.
+
+### 3.5 Touch and small screens — where these recipes actually break
+
+Most of this file is written from a desktop viewport, and most of the traffic to a local client's site is not. The failures below are specific and each has a one-line fix.
+
+**1. Hover states stick on touch.** Tapping an element with a `:hover` rule leaves it in the hovered state until you tap elsewhere — so a card that lifts stays lifted, and a nav link stays highlighted. Never write a bare `:hover`.
+
+```css
+/* Every hover effect in this file and in hover-effects.md belongs inside this. */
+@media (hover: hover) and (pointer: fine) {
+  .card { transition: transform var(--dur-ui) var(--ease-out); }
+  .card:hover { transform: translateY(-2px); }
+}
+
+/* Touch gets its own feedback: instant, on press, no distance. */
+@media (hover: none) {
+  .card:active { background: var(--paper-2); }
+}
+```
+
+**2. A hover-only affordance is an invisible affordance.** If a caption, a price or a "view project" label is revealed on hover, it does not exist on a phone. Anything a visitor needs must be visible at rest; hover may only *enhance*.
+
+**3. Scroll-driven reveals and the mobile URL bar.** On iOS and Android the collapsing address bar resizes the viewport mid-scroll, which re-resolves `view()` ranges and can make a reveal jump or replay. Two mitigations: keep `animation-range` well inside the viewport (`entry 15% cover 38%` as written is deliberately conservative — do not use ranges that start at `entry 0%`), and prefer `dvh`/`svh` over `vh` if any of your ranges or heights are viewport-based. Also worth knowing: iOS momentum scrolling continues after the finger lifts, so scrubbed motion feels looser on touch than it does on a trackpad. Budget your one big scrubbed moment for a section where that is acceptable.
+
+**4. The display clamp must be checked at 390px, not just derived.** `--step-4`'s lower bound is 44px. At 390px with `max-width: 16ch` on `.display`, a long word (a place name, a surname) can still overflow. Add a safety net rather than trusting the clamp:
+
+```css
+.display { overflow-wrap: break-word; hyphens: auto; }
+```
+
+**5. Tap targets vs. the tracked-caps eyebrow.** An `.eyebrow` at 11–13px is a *label*, never a link. If any small-caps element is interactive, it needs padding to reach 44×44px — the tracking makes it look bigger than its hit box is.
+
+**6. Section padding must not eat the screen.** `--space-l` bottoms out at 80px per side, which is correct; do not let anyone "fix" the desktop ratio by raising the clamp minimum. On a 390×844 screen, 208px of padding would spend a quarter of the viewport on nothing.
+
+**7. Horizontal-scroll sections (§5.9, §5.11) are a desktop conceit.** On touch they fight the browser's own gesture handling. Either give them a plain vertical stacked layout below 48rem, or do not ship them.
+
+### 3.6 When a library is justified
 
 Only two honest cases, and neither is common on a promotional site:
 
@@ -849,9 +1103,10 @@ Run every item. Each is objectively pass/fail. **Do not tell the user the page i
 
 ### A. Measurable design
 
-- [ ] Section vertical padding ÷ body font-size **≥ 7**
-- [ ] Display size ÷ body size at desktop **≥ 4.5**
-- [ ] **≤ 6** distinct spacing values in the stylesheet, all from one scale
+- [ ] Section vertical padding ÷ body font-size **≥ 7**, measured at **≥1280px**
+- [ ] Display size ÷ body size at **≥1280px** is **≥ 4.5**
+- [ ] **Zero** off-scale spacing values; the scale itself is **≤ 7 steps**
+- [ ] The page gutter is applied by **one** system only — grid edge tracks *or* `padding-inline`, never both (§1.1)
 - [ ] **≤ 3** distinct `aspect-ratio` values across all imagery
 - [ ] **≤ 2** chromatic hues; accent covers **< 3%** of pixels
 - [ ] **≤ 2** font families (weights don't count)
@@ -863,18 +1118,22 @@ Run every item. Each is objectively pass/fail. **Do not tell the user the page i
 - [ ] Prose has `max-width` in `ch`, **60–70ch**
 - [ ] Display line-height **< 1.05**; body line-height **1.5–1.6**
 - [ ] Negative tracking on display (**−0.02em or tighter**); positive on caps labels (**+0.12em or more**)
-- [ ] `text-wrap: balance` on headings, `text-wrap: pretty` on prose
+- [ ] `text-wrap: balance` on headings, `text-wrap: pretty` on prose — and the page still reads correctly with **both switched off** (Firefox gets no `pretty` at all, §0.2)
 - [ ] Real typographic characters throughout (— – ’ “ ” ×), no straight quotes, no hyphen-as-dash
 - [ ] `font-variant-numeric: tabular-nums` on every price, spec and phone number
-- [ ] No orphan (single word alone on the last line) in any heading at 1440px, 1024px, 768px and 390px
+- [ ] No orphan (single word alone on the last line) in any heading at 1440px, 1024px, 768px and 390px — **tested in Firefox**, where `pretty` does nothing and only your `&nbsp;` and measure are working
 
 ### C. Motion
 
 - [ ] Total animated moments **≤ 9**; big moments (pin/scrub/horizontal) **≤ 2**
 - [ ] Entrance translate distances **≤ 40px** everywhere
-- [ ] Only `transform` and `opacity` animate — grep for animated `width`, `height`, `top`, `left`, `margin`, `padding`, `box-shadow`, `filter`: **zero hits**
+- [ ] **Nothing that moves distance animates a layout property.** Grep for animated `width`, `height`, `top`, `left`, `right`, `bottom`, `margin`, `padding`, `inset`: **zero hits** — these trigger layout on every frame
+- [ ] Paint-level properties are used knowingly, not by accident: `color`, `background-color` and `border-color` transitions are fine (cheap, no distance); animated `box-shadow`, `filter`, `backdrop-filter` and `clip-path` are **capped at one element on the page**, and `clip-path` only for the single hero moment (§3.2). Static `filter` is unrestricted
 - [ ] Every reveal is **one-shot** (`unobserve` called) — nothing re-triggers on scroll-up
-- [ ] Every scroll-driven rule is inside `@supports (animation-timeline: view())`
+- [ ] Every scroll-driven rule is inside `@supports (animation-timeline: view())`, and the JS reveal tier is inside `@supports not (...)` / a `CSS.supports()` bail-out so the two tiers cannot both run (§3.4)
+- [ ] `animation-timeline` is declared **after** any `animation` shorthand on the same rule
+- [ ] Every `:hover` rule is inside `@media (hover: hover)`; touch has its own `:active` feedback (§3.5)
+- [ ] Nothing a visitor *needs* is revealed only on hover
 - [ ] **With JS disabled**, every section is visible, legible and correctly laid out
 - [ ] **With `prefers-reduced-motion: reduce`**, all content visible, nothing stuck at `opacity: 0`, no vestibular motion, hover feedback still exists
 - [ ] Scroll-scrubbed animations use `linear` easing
@@ -899,7 +1158,7 @@ Run every item. Each is objectively pass/fail. **Do not tell the user the page i
 - [ ] Checked at **390px, 768px, 1024px, 1440px, 1920px** — no horizontal scroll at any width
 - [ ] Tap targets **≥ 44×44px**
 - [ ] `<title>`, meta description, OG image (built from the client's material), favicon set, `LocalBusiness` JSON-LD
-- [ ] Zero external libraries loaded unless §3.5 justifies one, and the justification is written in a comment
+- [ ] Zero external libraries loaded unless §3.6 justifies one, and the justification is written in a comment
 
 ### F. The final two tests
 
@@ -926,8 +1185,8 @@ All verified reachable 2026-08-02. Where CSS numbers are quoted, they were read 
 | 10 | **Tengile Malamala** — https://tengilemalamala.com | Hospitality/lodge: how to make a small set of good-but-not-world-class photographs carry a whole site through crop discipline and space. |
 | 11 | **ERA Residence** — https://era-residence.com | Property/architecture register: grid discipline, marginal captions, full-bleed alternation (§5.3). |
 | 12 | **The Watch** — https://thewatch.60fps.fr | A single-object detail register — macro imagery and micro-motion, the §5.4 pattern executed by a studio rather than a maison. |
-| 13 | **MDN — scroll-driven animations** — https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Scroll-driven_animations | The authority on what you may actually ship. Confirms `animation-timeline` is **Limited availability, not Baseline** as of 2026-08-02 — which is why §3.4's `@supports` guard is mandatory, not stylistic. |
-| 14 | **MDN — `text-wrap-style`** — https://developer.mozilla.org/en-US/docs/Web/CSS/text-wrap-style | Confirms `pretty` is **Baseline (newly available, Oct 2024)** and documents the 6-line (Chromium) / 10-line (Firefox) cap on `balance` — the reason §2.4 splits them by role. |
-| 15 | **caniuse — `text-wrap: balance`** — https://caniuse.com/css-text-wrap-balance | 89.86% global, Chrome 130+, Safari 17.5+, Firefox 121+. Use this to justify shipping it unguarded. |
+| 13 | **MDN — `animation-timeline`** — https://developer.mozilla.org/en-US/docs/Web/CSS/animation-timeline | The authority on what you may actually ship. Confirms **Limited availability, not Baseline** as of 2026-08-02 — which is why §3.4's `@supports` guard is mandatory, not stylistic. Per BCD: Chrome 115, Safari 26, Firefox **preview only**. |
+| 14 | **MDN — `text-wrap-style`** — https://developer.mozilla.org/en-US/docs/Web/CSS/text-wrap-style | Documents the 6-line (Chromium) / 10-line (Firefox) cap on `balance` — the reason §2.4 splits `balance` and `pretty` by role. **Read the compat table, not the Baseline banner:** the banner's "newly available Oct 2024" describes the property with its `auto`/`balance`/`stable` values, *not* the `pretty` value, which has no Firefox support at all. |
+| 15 | **MDN browser-compat-data (BCD)** — https://github.com/mdn/browser-compat-data — e.g. `css/properties/text-wrap.json` | **The source to check before writing any support claim in this file.** Raw JSON, one fetch, exact `version_added` per browser. Every version number in §0.2 came from here on 2026-08-02. Prefer it to caniuse percentages, which are easy to misquote and which this file previously got wrong (it claimed Chrome 130 for `text-wrap: balance`; BCD says **114**). |
 
 **How to use the corpus:** open five of them, and for each write down the six numbers from §1.9 (spacing values, aspect ratios, hues, curves, fonts, moments). They will cluster. That cluster is the luxury register, and it is the target your page has to hit.

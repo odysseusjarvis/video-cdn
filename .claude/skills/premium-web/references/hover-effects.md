@@ -1248,6 +1248,9 @@ document.querySelectorAll('.scratch').forEach((root) => {
 
   /** Sample every 16th pixel — 1/256 of the work, identical answer at this precision. */
   function cleared() {
+    // getImageData throws IndexSizeError on a zero-sized rect, which is exactly what you
+    // get if .scratch is inside a display:none tab or accordion when this module runs.
+    if (!cv.width || !cv.height) return 0;
     const d = ctx.getImageData(0, 0, cv.width, cv.height).data;
     let clear = 0, total = 0;
     for (let i = 3; i < d.length; i += 4 * 16) { total++; if (d[i] < 24) clear++; }
@@ -1615,13 +1618,25 @@ function slideFallback(nav, item) {
 }
 ```
 
-**Zero-JS variant.** For *equal-width* tabs only, `:has()` positions the pill with no script:
+**Zero-JS variant.** For *equal-width* tabs only, `:has()` positions the pill with no script.
+Note the two unstated assumptions this carries, both of which will bite: the pill must be a
+sibling of the items inside a positioned `.pills` (it is a *different* element from the
+`.pills__pill` above, which lives inside an item), and the step must account for the row's
+`gap` or the pill drifts a little further off with every tab.
 
 ```css
+.pills { position: relative; --step: calc(100% + 2px); }   /* 2px == the row's gap */
 .pills:has(.pills__i:nth-child(1):hover) { --sel: 0; }
 .pills:has(.pills__i:nth-child(2):hover) { --sel: 1; }
 .pills:has(.pills__i:nth-child(3):hover) { --sel: 2; }
-.pills__pill--fixed { transform: translateX(calc(var(--sel, 0) * 100%)); transition: transform var(--dur-base) var(--ease-spring); }
+.pills__pill--fixed {
+  position: absolute; z-index: 0; inset: 4px auto 4px 4px;
+  width: calc((100% - 8px - 4px) / 3);        /* 3 equal tabs, minus padding and gaps */
+  border-radius: 999px; background: var(--ink);
+  transform: translateX(calc(var(--sel, 0) * var(--step)));
+  transition: transform var(--dur-base) var(--ease-spring);
+}
+.pills:has(.pills__pill--fixed) .pills__i { z-index: 1; }  /* labels above the pill */
 ```
 
 ---
@@ -2350,7 +2365,10 @@ case studies by sector. Register: universal.
 }
 .filt__bar button[aria-pressed='true'] { color: var(--bg); background: var(--ink); border-color: var(--ink); }
 
-/* View Transitions path: fade cards in/out, glide the survivors. */
+/* View Transitions path: fade cards in/out, glide the survivors.
+   `view-transition-class` (the `.filt-card` selector form) is Chromium-only today.
+   Elsewhere this rule simply does not match and the group animates at the UA default —
+   which is still a correct FLIP, just not your duration. Tuning only, never load-bearing. */
 ::view-transition-group(.filt-card) { animation-duration: 380ms; animation-timing-function: var(--ease-out); }
 
 /* ---- Touch strategy: identical. Filters are buttons — tap and click are the same event.
@@ -2615,9 +2633,18 @@ counter-spin. Two transforms on two elements compose; two transforms on one elem
   --spin: 40s;
   position: relative;
   display: grid; place-items: center;
-  width: calc(var(--r) * 2 + 120px);
+  /* The +140px is the label allowance: a label sits centred at radius --r, so it reaches
+     --r + (its own width / 2). Keep labels under ~140px wide or they cross the edge. */
+  width: min(100%, calc(var(--r) * 2 + 140px));
   aspect-ratio: 1;
   margin-inline: auto;
+  /* REQUIRED. `.orbit__ring` is a square that rotates a full turn, and the axis-aligned
+     bounding box of a rotating square is up to √2 (≈1.41×) its side length. That swept box
+     is real layout overflow: without clipping it, the ring silently widens the document and
+     the whole page gains a horizontal scrollbar that appears and disappears as it spins —
+     on narrow viewports especially. `clip` rather than `hidden` so this never becomes a
+     scroll container. Anything you rotate needs this. */
+  overflow: clip;
 }
 .orbit__hub { font-weight: 700; letter-spacing: .02em; }
 
@@ -2660,7 +2687,9 @@ counter-spin. Two transforms on two elements compose; two transforms on one elem
 /* ---- Touch strategy B: tap-and-hold the ring, or the always-present Pause button.
    Autonomous motion needs a stop control on touch — there is no "move away to resume". ---- */
 @media (hover: none) {
-  .orbit { --r: clamp(96px, 34vw, 150px); --spin: 52s; }
+  /* 28vw, not 34vw: at 34vw the ring alone exceeded a 375px viewport before the rotation
+     overflow was even counted. Size the radius so `2r + 140` still fits the narrowest phone. */
+  .orbit { --r: clamp(88px, 28vw, 150px); --spin: 52s; }
 }
 .orbit.is-held .orbit__ring,
 .orbit.is-held .orbit__ring li > span { animation-play-state: paused; }
@@ -2873,3 +2902,33 @@ Run this before handing a site over. Every box is a real failure mode seen in th
 - [ ] Every state change a sighted user sees is announced via `role="status"` or `aria-live`.
 - [ ] Icon-only controls carry a real accessible name — a tooltip is not a name.
 - [ ] Swipe, drag, and scratch interactions all have a keyboard/button equivalent.
+- [ ] Nothing is hidden with `opacity: 0` alone — it stays in the accessibility tree. Pair it
+      with `visibility: hidden`, or use the `hidden` attribute (#15).
+
+**Silent failures — the ones that ship because nothing throws**
+
+Every item below was found in a real revision of *this file*. None logged a console error;
+each one just looked like a slightly weak design choice.
+
+- [ ] **A `transform` keyframe replaces a positioning `transform`; it never composes.** If an
+      element needs to be both placed and animated, that is two elements (#19).
+- [ ] **`transform-style: preserve-3d` is not inherited and defaults to `flat`.** Every ancestor
+      between the `perspective` element and the depth element needs it, or all `translateZ`
+      silently collapses to a flat render (#12).
+- [ ] **`position: relative` + `z-index: auto` does not create a stacking context**, so a
+      `z-index: -1` child escapes and paints behind an ancestor's background. Add
+      `isolation: isolate` (#11).
+- [ ] **A `popover` is in the top layer; its containing block is the viewport.** Wrapping it in
+      `position: relative` does nothing (#4, #10).
+- [ ] **`transform` on a non-replaced inline box does nothing.** Check the `display` of anything
+      you transform (#2).
+- [ ] **Never write a selector that matches CSSOM output** — `[style*='--k:0']` dies the instant
+      `setProperty` re-serialises the attribute with a space (#18).
+- [ ] **Watch specificity when layering an effect onto a host component.** Use the independent
+      `translate`/`rotate`/`scale` properties so the two compose instead of one silently
+      winning (#3).
+- [ ] **A bubbled `animationend` fires on the FIRST descendant to finish**, not the last (#9).
+- [ ] Re-init functions (`onEnvChange`) tear down their old listeners — `AbortController`,
+      not a second `addEventListener` (#5, #20).
+- [ ] `cursor: none` and other "the JS will handle it" styles are applied by JS, never by the
+      stylesheet, so a hydration failure is not a dead zone (#5).

@@ -160,7 +160,7 @@ northgate-joinery/
 
 Duplicating the site into both folders when there is no build step is confusing, not generous. Pick one and explain it.
 
-**Never ship a real `.env`, API key, form endpoint token, or analytics ID that belongs to you rather than the client.** Grep before packaging (§7.2.7).
+**Never ship a real `.env`, API key, form endpoint token, or analytics ID that belongs to you rather than the client.** Grep before packaging (§7.2.9).
 
 ### 1.3 `START-HERE.txt` and `README.md`
 
@@ -205,7 +205,7 @@ local server", has a one-line fix.
 6. **Building it** (only if `source/` exists) — Node version, install, dev, build, preview (§4.4).
 7. **Publishing it** — what to upload, and where the site is already live if you deployed a preview (§3.3).
 8. **Performance** — the real Lighthouse numbers with a link to `proof/lighthouse-mobile.html`.
-9. **Browser support** — what was tested, what degrades, and what the fallback looks like.
+9. **Browser support** — name the engines you actually ran (§1.4), not the ones you assume work. State which effects are progressive enhancements and what a non-supporting browser shows instead. If the only engine tested was Chromium, say Chromium.
 10. **Ownership & licences** — one line, pointing at LICENCE-AND-OWNERSHIP.md.
 11. **Known limitations / not included** — copied verbatim from the build report's "unfinished" section. Do not bury this.
 
@@ -252,10 +252,26 @@ your site to a font provider.
   provider's terms, not by this document.
 
 ## Warranty
-Delivered as-is. Tested in current Chrome, Firefox, Safari and on mobile
-viewports as recorded in `proof/VERIFY.txt` on <date>. No guarantee is made
-about browsers released after that date, or about third-party services.
+Delivered as-is. Automated checks were run in Chromium <version> at viewport
+widths from 320px to 1920px, as recorded in `proof/VERIFY.txt` on <date>.
+<If other engines were tested, name them here. If they were not, say so:>
+Firefox and Safari were not available in the build environment and have not been
+tested. The site uses no engine-specific features, and effects that Firefox does
+not support degrade to their finished state rather than breaking — but this is
+reasoning, not measurement. No guarantee is made about browsers released after
+that date, or about third-party services.
 ```
+
+**Do not write "tested in Chrome, Firefox and Safari" unless you actually ran those engines.** The default container ships Chromium only — `ls /opt/pw-browsers` returns `chromium*` and `ffmpeg`, no `firefox`, no `webkit` — and every gate script in §7 calls `chromium.launch()`. An unverifiable cross-browser claim in the one document the client would wave at a lawyer is the worst possible place to be sloppy.
+
+If cross-engine evidence is worth the download, Playwright can supply it, and the gate scripts need only the launcher swapped:
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx --yes playwright@1.56.1 install firefox webkit
+# then, in any gate script: const { firefox, webkit } = require("playwright");
+```
+
+If the install is blocked, that is a `SKIPPED (reason)` line in `VERIFY.txt` per §7.4 — not a licence to assert it passed.
 
 If you used *anything* whose licence you could not verify, it does not ship. Put it in `assets/originals/` marked `reference-only`, and say so in both the manifest and the build report.
 
@@ -367,7 +383,7 @@ brand/logo/logo.svg,derived,"redrawn from client PNG",transferred to client,all 
 | `.astro/`, `.vite/`, `.next/`, `.cache/`, `.parcel-cache/`, `.turbo/` | Build caches. Machine-specific, sometimes absolute-path-poisoned. |
 | `.DS_Store`, `Thumbs.db`, `desktop.ini` | Noise. Makes you look sloppy on the client's Mac. |
 | `*.log`, `npm-debug.log*`, `.npm/` | Noise. |
-| `.env`, `.env.*` (except `.env.example`) | **Secrets.** Hard fail if found (§7.2.7). |
+| `.env`, `.env.*` (except `.env.example`) | **Secrets.** Hard fail if found (§7.2.9). |
 | `screenshots/tmp/`, `harvest/`, `evidence.json`, scraped HTML | Your working intermediates. Interesting to you, confusing to the client, and possibly a rights problem. |
 | `*.psd`, `*.fig`, unedited 40 MB HEIC bursts | Only if the client did not supply them. If they did, they belong in `assets/originals/`. |
 | `.playwright-mcp/`, `test-results/`, `playwright-report/` | Ephemeral test output. `proof/` is the curated version. |
@@ -498,8 +514,12 @@ ROOT="$(find "$T" -maxdepth 2 -type d -name site | head -1)"
 ( cd "$(dirname "$ROOT")" && sha256sum -c --quiet SHA256SUMS.txt ) \
   && echo "PASS checksums" || { echo "FAIL checksums"; exit 1; }
 
-# serve the extracted copy on a port nothing else is using
-npx --yes serve -s "$ROOT" -l 4321 >/dev/null 2>&1 &
+# Serve the extracted copy on a port nothing else is using.
+# NEVER pass -s/--single here. `serve -s` rewrites every not-found request to
+# index.html with a 200, so a missing stylesheet, a broken image and a dead
+# internal link all come back "fine" — and the 404 assertions below become
+# decoration. -s is for SPAs; a delivered brochure site is not one.
+npx --yes serve "$ROOT" -l 4321 >/dev/null 2>&1 &
 SRV=$!; trap 'kill $SRV 2>/dev/null; rm -rf "$T"' EXIT
 for i in $(seq 1 40); do curl -sf -o /dev/null http://127.0.0.1:4321/ && break || sleep 0.25; done
 
@@ -532,8 +552,16 @@ const { chromium } = require("playwright");
   brokenImgs.forEach(s => failures.push("broken img: " + s));
 
   // Fonts actually loaded — catches a wrong @font-face path that silently falls back.
-  const fontsOk = await page.evaluate(async () => { await document.fonts.ready; return document.fonts.size > 0; });
-  if (!fontsOk) failures.push("no webfonts loaded");
+  // document.fonts.size counts DECLARED faces, loaded or not, so it cannot detect the
+  // bug it is meant to catch. Check status instead. A site that deliberately uses only
+  // system fonts declares none, which is a pass, not a failure.
+  const fonts = await page.evaluate(async () => {
+    await document.fonts.ready;
+    const all = [...document.fonts];
+    return { declared: all.length, loaded: all.filter(f => f.status === "loaded").length };
+  });
+  if (fonts.declared > 0 && fonts.loaded === 0)
+    failures.push(`${fonts.declared} @font-face rules declared but none loaded — check the paths`);
 
   // The page has real content, not an empty shell.
   const textLen = (await page.locator("body").innerText()).trim().length;
@@ -800,7 +828,9 @@ Opening a file directly gives the page a `file://` origin, which browsers treat 
 | Service worker | never registers | don't ship one for a brochure site |
 | `canvas.getImageData()` on a local image | tainted-canvas error | avoid, or accept degradation |
 | Web fonts | usually **fine** with relative paths | keep paths relative |
-| CSS, images, scroll animations, IntersectionObserver, view transitions | **fine** | — |
+| CSS, images, scroll-driven animations, IntersectionObserver | **fine** | — |
+| Same-document view transitions (`document.startViewTransition`) | **fine** | Baseline newly available (Chrome 111, Safari 18, Firefox 144) |
+| **Cross-document** view transitions (`@view-transition`) | **never fire** | Each `file://` document is its own opaque origin, so the same-origin requirement fails. Also Baseline *limited* — Chrome 126, Safari 18.2, **no Firefox**. Treat the un-transitioned navigation as the real design. |
 
 **Design goal: the delivered vanilla build has zero `file://` breakage.** If you achieve it, say so in the README and skip §4.3 entirely. If you cannot — e.g. the site loads `data/projects.json` — then either inline it or write this honestly:
 
@@ -888,7 +918,7 @@ Troubleshooting table — include it, these four cover most of what happens:
 |---|---|---|
 | `'npm' is not recognized` / `command not found: npm` | Node isn't installed, or the terminal predates the install | Install Node, then **close and reopen the terminal** |
 | `EACCES` / permission denied (Mac) | installing into a system folder | You are in the wrong directory. `cd` into `source` first. Never use `sudo npm install`. |
-| `Unsupported engine` / `requires Node >=24` | wrong Node major | Install Node 24 LTS |
+| `Unsupported engine` / `requires Node >=22` | wrong Node major | Install Node 24 LTS |
 | `port 4321 is already in use` | a previous run is still going | Close the other terminal, or `npm run dev -- --port 4322` |
 
 Ship `.nvmrc` containing `24` so anyone using `nvm` gets the right version with `nvm use`, and pin it in `package.json`:
@@ -1003,13 +1033,18 @@ du -ch proof/*/*.jpg | tail -1     # keep the total under ~700 KB
 
 ```bash
 # Serve the BUILT site — never measure the dev server, its numbers are meaningless.
-npx --yes serve -s site -l 4321 >/dev/null 2>&1 &
+# No -s: see §2.4. Under -s a 404 returns index.html at 200 and Lighthouse
+# scores a page that does not exist.
+npx --yes serve site -l 4321 >/dev/null 2>&1 &
 sleep 2
 
 export CHROME_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome
 
+# Do NOT add --preset=perf here. That preset forces --only-categories=performance,
+# which silently overrides the four categories below; the extraction script then
+# throws on r.categories.accessibility being undefined.
 npx --yes lighthouse http://127.0.0.1:4321 \
-  --preset=perf --form-factor=mobile --screenEmulation.mobile \
+  --form-factor=mobile --screenEmulation.mobile \
   --output=html --output=json \
   --output-path=./proof/lighthouse-mobile \
   --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage" \
@@ -1022,7 +1057,15 @@ npx --yes lighthouse http://127.0.0.1:4321 \
   --chrome-flags="--headless=new --no-sandbox" --quiet
 ```
 
-Extract the numbers so nothing is transcribed by hand:
+**Filenames.** With two `--output` formats, Lighthouse appends its own suffixes: `--output-path=./proof/lighthouse-mobile` writes `lighthouse-mobile.report.html` and `lighthouse-mobile.report.json`, *not* `lighthouse-mobile.html`. Either rename after the run or use the real names in the tree (§1.1 lists the short form):
+
+```bash
+for v in mobile desktop; do
+  mv -f "proof/lighthouse-$v.report.html" "proof/lighthouse-$v.html" 2>/dev/null || true
+done
+```
+
+Extract the numbers so nothing is transcribed by hand (this reads the `.report.json`, so run it *before* any rename of the JSON):
 
 ```bash
 node -e '
@@ -1119,23 +1162,36 @@ Everything inline; images as data URIs; no network requests; the comparison slid
   @media (min-width:48rem){ .ba{ aspect-ratio:1440/900 } }
   .ba img{ position:absolute; inset:0; width:100%; height:100%;
            object-fit:cover; object-position:top center; display:block }
-  /* Only the TOP layer is clipped. clip-path is compositor-friendly; no layout runs. */
+  /* Only the TOP layer is clipped. clip-path is paint-only: no layout, no reflow. */
   .ba__after{ clip-path: inset(0 calc(100% - var(--pos,50%)) 0 0) }
-  .ba__handle{ position:absolute; inset-block:0; left:var(--pos,50%);
-               width:2px; background:var(--c-paper); translate:-1px 0;
-               box-shadow:0 0 0 1px color-mix(in oklab,var(--c-ink) 30%,transparent);
+
+  /* The handle is a FULL-WIDTH box moved with transform, not an element whose `left`
+     is rewritten on every pointer move. `left` is a layout property: setting it each
+     input event forces layout on every frame of the drag. A percentage translateX
+     resolves against the element's own border-box, so a width:100% handle translated
+     by var(--pos) lands exactly where left:var(--pos) would have — on the compositor. */
+  .ba__handle{ position:absolute; inset-block:0; left:0; width:100%;
+               transform:translateX(var(--pos,50%)); will-change:transform;
                pointer-events:none }
-  .ba__handle::after{ content:""; position:absolute; top:50%; left:50%;
+  .ba__handle::before{ content:""; position:absolute; inset-block:0; left:-1px; width:2px;
+               background:var(--c-paper);
+               box-shadow:0 0 0 1px color-mix(in oklab,var(--c-ink) 30%,transparent) }
+  .ba__handle::after{ content:""; position:absolute; top:50%; left:0;
                width:2.75rem; aspect-ratio:1; translate:-50% -50%; border-radius:50%;
                background:var(--c-paper);
                box-shadow:0 1px 10px color-mix(in oklab,var(--c-ink) 35%,transparent) }
   /* The real control: a native range input, so it is keyboard- and AT-accessible for free. */
   .ba__range{ position:absolute; inset:0; width:100%; height:100%;
-              margin:0; opacity:0; cursor:ew-resize; appearance:none; background:none }
-  .ba__range:focus-visible ~ .ba__handle{ outline:3px solid var(--c-accent); outline-offset:2px }
+              margin:0; opacity:0; cursor:ew-resize; appearance:none; background:none;
+              touch-action:pan-y }
+  /* Outline the knob, not the invisible full-width handle box. */
+  .ba__range:focus-visible ~ .ba__handle::after{ outline:3px solid var(--c-accent); outline-offset:3px }
+  /* pointer-events:none is REQUIRED — the tags come after .ba__range in the DOM and
+     would otherwise sit on top of it, swallowing any drag that starts on a badge. */
   .ba__tag{ position:absolute; top:.75rem; padding:.3rem .6rem; border-radius:.35rem;
             font:600 .7rem/1 var(--f-text); letter-spacing:.1em; text-transform:uppercase;
-            background:color-mix(in oklab,var(--c-paper) 88%,transparent); color:var(--c-ink) }
+            background:color-mix(in oklab,var(--c-paper) 88%,transparent); color:var(--c-ink);
+            pointer-events:none }
   .ba__tag--l{ left:.75rem } .ba__tag--r{ right:.75rem }
 
   /* ---- scores ------------------------------------------------------------ */
@@ -1253,10 +1309,24 @@ Everything inline; images as data URIs; no network requests; the comparison slid
 
 Notes on why it is built this way:
 - **No library.** The slider is `<input type="range">` + one custom property; the entrance is `animation-timeline: view()`. Nothing here needs GSAP, Motion or Lenis.
-- **`clip-path: inset()` on the top layer only** — the compositor handles it; nothing reflows. Never animate `width` for a comparison slider.
-- **Reduced motion**: the whole entrance block sits inside `@media (prefers-reduced-motion: no-preference)` nested in `@supports`. With reduced motion, or in a browser without `view()`, elements are simply visible — the fallback is the default state, so there is nothing to get wrong. The slider still works, because dragging is a user action, not motion.
+- **`clip-path: inset()` on the top layer only** — paint-only, no layout. Never animate `width` for a comparison slider.
+- **The handle moves with `transform`, not `left`.** Both would look identical; only one avoids a layout pass on every frame of the drag. This is the whole rule: if a value changes during an interaction, it must be `transform`, `opacity`, `clip-path` or `filter` — never `left`, `top`, `width`, `height`, `margin` or `padding`.
+- **Reduced motion**: the entrance block sits inside `@media (prefers-reduced-motion: no-preference)` nested in `@supports`. With reduced motion, or in a browser without `view()`, elements are simply visible — the fallback is the default state, so there is nothing to get wrong. This is the *only* animated effect on the page; the slider is user-driven, not motion, and needs no branch.
+- **`animation: rise both linear` deliberately omits a duration.** `animation-duration`'s initial value is `auto`, which for a progress-based timeline means "the whole range". Adding an explicit `1s` would be ignored on a scroll timeline but would become a real 1s animation in any browser that supports `@supports (animation-timeline: view())` partially. Leave it off.
 - **Dark mode** via tokens only, so the page looks deliberate wherever the client opens it.
-- **`touch-action: pan-y`** on `.ba` so dragging the slider horizontally does not trap vertical page scrolling on a phone.
+- **`touch-action: pan-y`** on `.ba` *and* on `.ba__range` — the property is not inherited, and the range input is the element actually hit-tested, so vertical page scrolling on a phone depends on it being set there too.
+
+**Browser support for the entrance, verified 2026-08-02.** `animation-timeline: view()` is **Baseline: Limited**, not widely available:
+
+| Engine | Scroll-driven animations |
+|---|---|
+| Chrome / Edge | 115+ (July 2023) |
+| Safari / iOS Safari | 26+ (September 2025) |
+| **Firefox** | **not implemented** — Mozilla's position is positive, but it has not shipped |
+
+So a Firefox visitor sees no entrance animation at all. That is *fine* — the fallback is the finished state — but say it plainly rather than implying the effect is universal. `CSS.supports("animation-timeline: view()")` returns true in Chromium, so the `@supports` guard is a valid detector and the non-supporting path is genuinely reached rather than being dead code.
+
+One thing this page does that you should **not** copy into the delivered site: `body { overflow-x: hidden }`. On a self-contained one-off it is insurance; on the client's site it *hides* horizontal overflow rather than fixing it, and it will mask the exact defect §7.2.1 exists to catch.
 
 Inline the images:
 
@@ -1299,7 +1369,7 @@ leaves the site.**
 ## 2. Motion decisions
 | Where | Chosen | Why this and not something else |
 |---|---|---|
-| Hero heading | `animation-timeline: view()`, masked rise | Native scroll-driven; no JS, no jank. Fallback = visible. |
+| Hero heading | `animation-timeline: view()`, masked rise | Native scroll-driven; no JS, no jank. Baseline *limited* — Chrome/Edge 115+, Safari 26+, **not Firefox**. Fallback in Firefox and under reduced motion = the finished, visible state. |
 | Section entrances | Same, `entry 10% cover 26%` | Finishes early; nothing is ever mid-fade when read. |
 | Gallery hover | `transform: scale(1.03)` + `clip-path` wipe | GPU-only. Disabled under `hover: none`. |
 | Sticky testimonial | `position: sticky` | Pure CSS. No scroll listener anywhere on the site. |
@@ -1330,8 +1400,11 @@ the bundle creates a recurring cost for the client.
   client adds Google Analytics, they will need one.
 - Only English. If the second language discussed on 2026-07-30 is still wanted, the
   copy deck is ready in `source/content/` — add `content/cy/` and duplicate the keys.
-- Not tested on Safari below 17 (unavailable in this container). The scroll-driven
-  entrances degrade to "already visible", which is safe, but nobody has looked at it.
+- **Only Chromium was actually run.** Firefox and WebKit are not installed in the build
+  container, so every figure and every gate line in `proof/VERIFY.txt` is Chromium-only.
+  Firefox does not implement scroll-driven animations at all, so its users get the
+  finished state with no entrance — safe by construction, but unobserved. Safari 26+
+  supports them; Safari below 26 also falls back to visible. Nobody has looked at either.
 
 ## 5. Needs the client's decision
 1. **Team photo** — placeholder is a workshop shot. Any group photo at 1600px+ works.
@@ -1391,16 +1464,31 @@ const WIDTHS = [320, 360, 390, 414, 768, 1024, 1280, 1440, 1920];  // 320 = smal
       // Text too small to read on a phone.
       const tiny = [...document.querySelectorAll("p,li,a,span,td,label,button")]
         .filter(el => el.textContent.trim() && parseFloat(getComputedStyle(el).fontSize) < 12).length;
-      // Tap targets: WCAG 2.2 AA minimum is 24×24 CSS px.
+      // Tap targets: WCAG 2.2 SC 2.5.8 (AA) minimum is 24×24 CSS px — but the SC has
+      // an explicit INLINE exception: a link sitting inside a sentence or block of
+      // text is exempt, because you cannot enlarge it without wrecking the prose.
+      // Without this exception the check fails on any page with a link in a
+      // paragraph (a normal inline <a> is ~17px tall) and the gate can never pass.
+      const inlineExempt = el => {
+        if (el.tagName !== "A") return false;
+        const p = el.parentElement;
+        if (!p) return false;
+        const own = el.textContent.trim().length;
+        // Surrounded by meaningfully more text than the link itself = inline in prose.
+        return p.textContent.trim().length > own + 20;
+      };
       const small = [...document.querySelectorAll("a[href],button,input,select,[role=button]")]
         .filter(el => { const b = el.getBoundingClientRect();
-                        return b.width > 0 && (b.width < 24 || b.height < 24); }).length;
+                        return b.width > 0 && (b.width < 24 || b.height < 24); })
+        .filter(el => !inlineExempt(el))
+        .map(el => el.tagName.toLowerCase() + ":" + el.textContent.trim().slice(0, 24));
       return { overflow, wide, tiny, small };
     });
 
     if (r.overflow > 1) fails.push(`${w}px: overflow ${r.overflow}px — culprits: ${r.wide.join(", ") || "unknown"}`);
     if (r.tiny > 0)     fails.push(`${w}px: ${r.tiny} elements with font-size < 12px`);
-    if (w <= 768 && r.small > 0) fails.push(`${w}px: ${r.small} tap targets under 24×24px`);
+    if (w <= 768 && r.small.length)
+      fails.push(`${w}px: ${r.small.length} tap targets under 24×24px — ${r.small.slice(0,5).join(", ")}`);
     await ctx.close();
   }
   await b.close();
@@ -1534,21 +1622,31 @@ const { chromium } = require("playwright");
   if (!forms.length) { console.log("PASS forms (none present)"); await b.close(); process.exit(0); }
 
   for (const [i, form] of forms.entries()) {
-    const meta = await form.evaluate(f => ({
-      action: f.getAttribute("action"), method: (f.getAttribute("method")||"get").toLowerCase(),
-      // Every control must have an accessible name, or a screen reader announces "edit text, blank".
-      unlabelled: [...f.elements].filter(el =>
-        ["INPUT","SELECT","TEXTAREA"].includes(el.tagName) && el.type !== "hidden" &&
-        !el.labels?.length && !el.getAttribute("aria-label") && !el.getAttribute("aria-labelledby")
-      ).map(el => el.name || el.type),
-      // Correct types get the right mobile keyboard and free validation.
-      typos: [...f.elements].filter(el =>
-        /mail/i.test(el.name||"") && el.type !== "email" ||
-        /phone|tel/i.test(el.name||"") && el.type !== "tel").map(el => el.name),
-      required: [...f.elements].filter(el => el.required).length,
-      autocomplete: [...f.elements].filter(el =>
-        ["INPUT","TEXTAREA"].includes(el.tagName) && el.type !== "hidden" && !el.autocomplete).map(el => el.name),
-    }));
+    const meta = await form.evaluate(f => {
+      // Only *data-entry* controls. Submit/reset/button/image inputs are not labelable:
+      // el.labels is null for them, so including them flags every correct form as
+      // having an "unlabelled" field. Verified in Chromium — a form with a properly
+      // labelled text input plus <input type="submit"> reports unlabelled:["submit"].
+      const DATA = el => ["INPUT","SELECT","TEXTAREA"].includes(el.tagName)
+        && !["hidden","submit","reset","button","image"].includes(el.type);
+      // WCAG 1.3.5 only asks for autocomplete on fields collecting the USER's own
+      // details. Demanding it on every control fails on a message textarea and on
+      // the submit button, i.e. on every real contact form.
+      const IDENTITY = /name|mail|phone|tel|mobile|address|street|town|city|postcode|zip|company|organi[sz]ation/i;
+      return {
+        action: f.getAttribute("action"), method: (f.getAttribute("method")||"get").toLowerCase(),
+        unlabelled: [...f.elements].filter(el => DATA(el) &&
+          !el.labels?.length && !el.getAttribute("aria-label") && !el.getAttribute("aria-labelledby")
+        ).map(el => el.name || el.type),
+        // Correct types get the right mobile keyboard and free validation.
+        typos: [...f.elements].filter(el => DATA(el) && (
+          /mail/i.test(el.name||"") && el.type !== "email" ||
+          /phone|tel|mobile/i.test(el.name||"") && el.type !== "tel")).map(el => el.name),
+        required: [...f.elements].filter(el => DATA(el) && el.required).length,
+        autocomplete: [...f.elements].filter(el =>
+          DATA(el) && IDENTITY.test(el.name || el.id || "") && !el.autocomplete).map(el => el.name),
+      };
+    });
     const tag = `form[${i}]`;
     if (!meta.action)            fails.push(`${tag}: no action — submitting reloads the page and loses the enquiry`);
     if (meta.unlabelled.length)  fails.push(`${tag}: unlabelled fields: ${meta.unlabelled.join(", ")}`);
@@ -1573,23 +1671,63 @@ const { chromium } = require("playwright");
 
 The single most embarrassing delivery failure. Scan the **built output**, because a placeholder can survive templating.
 
+Patterns live in a file, one per line. **Do not build this pattern as a single quoted shell string with `\` line-continuations** — inside single quotes a backslash-newline is *not* a continuation, so the string ends up containing a literal trailing `\`, GNU grep aborts with `grep: Trailing backslash` and exits **2**, and an `if grep ...; then` wrapper reads that non-zero exit as "no placeholders found" and prints `PASS`. That is a fail-open check in a fail-closed gate: it passes on every site, including ones full of Lorem ipsum.
+
 ```bash
 # gate/placeholders.sh <siteDir>
 set -uo pipefail
 DIR="${1:?}"
-PAT='Lorem ipsum|lorem ipsum|dolor sit amet|TODO|FIXME|XXX+|TBD|PLACEHOLDER|Placeholder|\
-Your Company|Your Business|Company Name|Business Name|Insert [a-z]+ here|Coming soon|\
-example\.com|example\.org|test@|foo@bar|555-?01[0-9]{2}|\+1 ?234 ?567|Lipsum|\
-\[[a-z ]+\]|\{\{[^}]+\}\}|\$\{[a-z]|£—|\bfrom £-\b'
-if grep -rInE "$PAT" "$DIR" --include='*.html' --include='*.css' --include='*.js' --include='*.json'; then
-  echo "FAIL placeholders (see above)"; exit 1
-fi
-# Untranslated template syntax that survived a build is a hard fail even in comments.
-if grep -rIn '{{' "$DIR" --include='*.html' >/dev/null; then echo "FAIL placeholders: unrendered {{ }}"; exit 1; fi
+PATFILE="$(mktemp)"; trap 'rm -f "$PATFILE"' EXIT
+
+# One ERE per line. No continuations, nothing to mis-quote.
+cat > "$PATFILE" <<'PATTERNS'
+[Ll]orem ipsum
+dolor sit amet
+\bTODO\b
+\bFIXME\b
+\bTBD\b
+[Pp]laceholder
+PLACEHOLDER
+Your (Company|Business)
+(Company|Business) Name
+Insert [a-z]+ here
+Coming soon
+example\.(com|org)
+test@
+foo@bar
+555-?01[0-9]{2}
+Lipsum
+\{\{[^}]*\}\}
+\$\{[a-z]
+PATTERNS
+
+grep -rInE -f "$PATFILE" "$DIR" \
+  --include='*.html' --include='*.css' --include='*.js' --include='*.json'
+rc=$?
+case "$rc" in
+  0) echo "FAIL placeholders (see above)"; exit 1 ;;
+  1) : ;;                       # no matches — the only good outcome
+  *) echo "FAIL placeholders: grep exited $rc (bad pattern / unreadable file)."
+     echo "  A grep error is NEVER a pass. Fix the pattern file and re-run."; exit 1 ;;
+esac
+
+# HTML only. `\[[a-z ]+\]` and `£—` are useless against CSS and JS: `[hidden]` is a
+# real selector and `arr[i]` is real code, so scanning those file types guarantees
+# false positives and trains you to ignore the check.
+grep -rInE -e '\[[a-z][a-z ]+\]' -e '£—' -e 'from £-' "$DIR" --include='*.html'
+rc=$?
+case "$rc" in
+  0) echo "FAIL placeholders: unrendered brackets or an unfilled price in HTML"; exit 1 ;;
+  1) : ;;
+  *) echo "FAIL placeholders: grep exited $rc on the HTML pass"; exit 1 ;;
+esac
+
 echo "PASS placeholders"
 ```
 
 `{{ }}`, `${...}` and `[bracketed]` catch templating that did not render — a class of bug that looks fine in the source and broken on the page. If a legitimate `£—` is intended (a genuinely unknown price), it must be listed in the build report §5 and acknowledged; otherwise it fails.
+
+**Whenever you wrap a check in `if grep ...`, decide explicitly what a grep *error* means.** `grep` has three exit codes — 0 found, 1 not found, 2 error — and the two-branch `if` collapses 1 and 2 into "clean". Every grep-based check in this file uses the three-way `case` above for that reason.
 
 #### 7.2.6 No missing images, and none oversized
 
@@ -1626,7 +1764,9 @@ const { chromium } = require("playwright");
     }).map(i => i.currentSrc || i.src),
     lcpLazy: [...document.images].slice(0,1).filter(i => i.loading === "lazy").map(i => i.src),
   }));
-  const heavy = [...bytes].filter(([,n]) => n > 300*1024).map(([u,n]) => `${u.split("/").pop()} ${Math.round(n/1024)}KB`);
+  // 500KB matches the JPEG hard ceiling in §2.3. A 300KB gate here would fail a
+  // hero that §2.3 explicitly permits — keep the two numbers in step.
+  const heavy = [...bytes].filter(([,n]) => n > 500*1024).map(([u,n]) => `${u.split("/").pop()} ${Math.round(n/1024)}KB`);
   await b.close();
 
   const fails = [];
@@ -1634,7 +1774,7 @@ const { chromium } = require("playwright");
   r.noAlt .forEach(s => fails.push("no alt attribute: " + s));
   r.noDims.forEach(s => fails.push("no width/height (CLS risk): " + s));
   r.lcpLazy.forEach(s => fails.push("first image is loading=lazy — delays LCP: " + s));
-  heavy   .forEach(s => fails.push("over 300KB: " + s));
+  heavy   .forEach(s => fails.push("over 500KB: " + s));
   r.oversized.forEach(s => fails.push("oversized: " + s));
   console.log(fails.length ? "FAIL images\n  " + fails.join("\n  ")
     : `PASS images (${bytes.size} loaded, ${r.emptyAlt} decorative alt="" — confirm intentional)`);
@@ -1702,7 +1842,13 @@ const [dir, base = "en"] = process.argv.slice(2);
 const flat = (o, p = "") => Object.entries(o).flatMap(([k, v]) =>
   v && typeof v === "object" && !Array.isArray(v) ? flat(v, `${p}${k}.`) : [[`${p}${k}`, v]]);
 
+// A vanilla site has no source/content at all. Without these two guards readdirSync
+// throws ENOENT, the gate records a FAIL, and gate.sh refuses to ship a site that is
+// perfectly fine — the single most likely false red in the whole gate.
+if (!dir || !fs.existsSync(dir)) { console.log("PASS i18n (single locale — no content directory)"); process.exit(0); }
+
 const locales = fs.readdirSync(dir).filter(f => f.endsWith(".json")).map(f => f.replace(".json", ""));
+if (locales.length <= 1) { console.log(`PASS i18n (single locale${locales[0] ? " — " + locales[0] : ""})`); process.exit(0); }
 if (!locales.includes(base)) { console.log(`FAIL i18n: no ${base}.json`); process.exit(1); }
 const load = l => Object.fromEntries(flat(JSON.parse(fs.readFileSync(path.join(dir, l + ".json"), "utf8"))));
 const ref = load(base), fails = [];
@@ -1726,8 +1872,11 @@ process.exit(fails.length ? 1 : 0);
 Plus the HTML side — each localised page must declare its language and cross-link:
 
 ```bash
-# every page has a lang attribute; multilingual sites have hreflang
-grep -L '<html[^>]*lang=' site/**/*.html && { echo "FAIL i18n: page missing lang attribute"; exit 1; }
+# Every page has a lang attribute. Use find, not site/**/*.html — `**` only recurses
+# with `shopt -s globstar`, and without it the glob expands to site/*/*.html, which
+# silently SKIPS site/index.html: the one page that matters most.
+missing="$(find site -name '*.html' -exec grep -L '<html[^>]*lang=' {} +)"
+[ -n "$missing" ] && { echo "FAIL i18n: pages missing lang attribute:"; echo "$missing"; exit 1; }
 ```
 
 If the site is monolingual, this check prints `PASS i18n (single locale)` — do not delete it, because a second language added later must not slip through.
@@ -1767,7 +1916,7 @@ REPORT="$D/proof/VERIFY.txt"
 : > "$REPORT"
 FAILED=0
 
-npx --yes serve -s "$D/site" -l 4321 >/dev/null 2>&1 &
+npx --yes serve "$D/site" -l 4321 >/dev/null 2>&1 &   # no -s — see §2.4
 SRV=$!; trap 'kill $SRV 2>/dev/null' EXIT
 for i in $(seq 1 40); do curl -sf -o /dev/null http://127.0.0.1:4321/ && break || sleep 0.25; done
 URL=http://127.0.0.1:4321/
@@ -1863,7 +2012,8 @@ NEEDS THE CLIENT'S INPUT — 4 items, listed in BUILD-REPORT.md §5.
   Biggest one: there is no team photo, so a workshop shot is standing in.
 
 NOT DONE
-  Form posts to mailto: (no server). English only. Untested on Safari 16.
+  Form posts to mailto: (no server). English only. Chromium-only testing —
+  Firefox and Safari were not available in the container.
   Detail in BUILD-REPORT.md §4.
 
 Nothing was pushed to GitHub.
