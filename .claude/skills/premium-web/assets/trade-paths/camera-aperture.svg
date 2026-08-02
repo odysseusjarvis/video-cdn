@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="tp-title tp-desc"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title id="tp-title">Camera aperture</title>
+  <desc id="tp-desc">A six-blade camera iris: outer barrel rings and six blades meeting at a hexagonal opening.</desc>
+  <g class="tp" style="--n:8">
+    <circle class="tp-ln" pathLength="1" style="--i:0" cx="120" cy="80" r="58"/>
+    <circle class="tp-ln" pathLength="1" style="--i:1" cx="120" cy="80" r="50"/>
+    <path class="tp-ln" pathLength="1" style="--i:2" d="M120 106 70.1 77.2"/>
+    <path class="tp-ln" pathLength="1" style="--i:3" d="M97.5 93V35.4"/>
+    <path class="tp-ln" pathLength="1" style="--i:4" d="m97.5 67 49.9-28.8"/>
+    <path class="tp-ln" pathLength="1" style="--i:5" d="m120 54 49.9 28.8"/>
+    <path class="tp-ln" pathLength="1" style="--i:6" d="M142.5 67v57.6"/>
+    <path class="tp-ln" pathLength="1" style="--i:7" d="M142.5 93 92.6 121.8"/>
+  </g>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="tp-title tp-desc"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title id="tp-title">Route line</title>
+  <desc id="tp-desc">A delivery route: an origin map pin, a curved road with a waypoint, and a destination map pin.</desc>
+  <g class="tp" style="--n:7">
+    <path class="tp-ln" pathLength="1" style="--i:0" d="M12 140h216"/>
+    <path class="tp-ln" pathLength="1" style="--i:1" d="M48 94C48 94 33 73 33 58a15 15 0 1 1 30 0c0 15-15 36-15 36z"/>
+    <circle class="tp-ln" pathLength="1" style="--i:2" cx="48" cy="57" r="5.5"/>
+    <path class="tp-ln" pathLength="1" style="--i:3" d="M196 78C196 78 181 57 181 42a15 15 0 1 1 30 0c0 15-15 36-15 36z"/>
+    <circle class="tp-ln" pathLength="1" style="--i:4" cx="196" cy="41" r="5.5"/>
+    <path class="tp-ln" pathLength="1" style="--i:5" d="M48 96c26 30 58 32 82 12s34-42 62-40"/>
+    <circle class="tp-ln" pathLength="1" style="--i:6" cx="90" cy="119" r="3.5"/>
+  </g>
+</svg>

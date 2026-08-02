@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="tp-title tp-desc"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title id="tp-title">Tooth outline</title>
+  <desc id="tp-desc">A two-rooted tooth in outline, with an enamel highlight inside the crown.</desc>
+  <g class="tp" style="--n:2">
+    <path class="tp-ln" pathLength="1" style="--i:0" d="M120 30c19-7 41 0 47 19s1 37-5 52c-5 16-10 32-18 36-7 3-12-3-13-13l-11-28-11 28c-1 10-6 16-13 13-8-4-13-20-18-36-6-15-11-33-5-52s28-26 47-19z"/>
+    <path class="tp-ln" pathLength="1" style="--i:1" d="M96 46c-4 12-4 24 0 36"/>
+  </g>
+</svg>

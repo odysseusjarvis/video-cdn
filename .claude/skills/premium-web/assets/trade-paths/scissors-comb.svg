@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="tp-title tp-desc"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title id="tp-title">Scissors and comb</title>
+  <desc id="tp-desc">Hairdressing scissors with two finger loops and crossed blades, next to a comb.</desc>
+  <g class="tp" style="--n:7">
+    <circle class="tp-ln" pathLength="1" style="--i:0" cx="48" cy="44" r="13"/>
+    <circle class="tp-ln" pathLength="1" style="--i:1" cx="48" cy="100" r="13"/>
+    <path class="tp-ln" pathLength="1" style="--i:2" d="m58 52 90 47"/>
+    <path class="tp-ln" pathLength="1" style="--i:3" d="m58 92 90-47"/>
+    <circle class="tp-ln" pathLength="1" style="--i:4" cx="96" cy="72" r="3.5"/>
+    <path class="tp-ln" pathLength="1" style="--i:5" d="M168 92h56a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4h-56a4 4 0 0 1-4-4V96a4 4 0 0 1 4-4z"/>
+    <path class="tp-ln" pathLength="1" style="--i:6" d="M168 110v30M176 110v32M184 110v32M192 110v32M200 110v32M208 110v32M216 110v32M224 110v30"/>
+  </g>
+</svg>

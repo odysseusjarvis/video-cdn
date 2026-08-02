@@ -13,7 +13,7 @@ Do not trust 2024 blog posts that call scroll-driven animations "widely supporte
 
 | Feature | Chrome/Edge | Safari | Firefox | Baseline |
 |---|---|---|---|---|
-| `animation-timeline: scroll()` / `view()` | 115+ (Jul 2023) | 26+ (Sep 2025) | **stable: NO** — behind `layout.css.scroll-driven-animations.enabled`, on in Nightly, Interop 2026 priority, expected ~156 | **Limited availability** — blocked by Firefox since Sep 2025 |
+| `animation-timeline: scroll()` / `view()` | 115+ (Jul 2023) | **26+ (Sep 2025)** — 18.x and earlier: no | **stable: NO** — behind `layout.css.scroll-driven-animations.enabled`, on in Nightly, Interop 2026 priority, 156 is the first supporting version | **Limited availability** — global support ~84% |
 | `ScrollTimeline` / `ViewTimeline` JS constructors | Chromium only | no | no | Limited |
 | `IntersectionObserver` | yes | yes | yes | **Widely available** |
 | `position: sticky` | yes | yes | yes | **Widely available** |
@@ -24,7 +24,7 @@ Do not trust 2024 blog posts that call scroll-driven animations "widely supporte
 
 **Consequences you must design around:**
 
-1. Roughly **1 in 8 visitors** (all Firefox stable) gets **no** CSS scroll-driven animation. On a plumber's or law firm's site that is real money. So: **the un-enhanced page must be complete, legible and beautiful on its own.**
+1. Roughly **1 in 6 visitors** gets **no** CSS scroll-driven animation (global support ~84%). **Do not think of that cohort as "Firefox".** Firefox is only ~2–3% of global usage; the overwhelming majority of the unsupported group is **Safari older than 26** — iPhones and iPads that have not taken the 26 update. That inverts the naive reading of this table: your un-enhanced tier is served mostly to *mobile Safari*, on exactly the phones that a roofer's or plumber's customers are holding. So: **the un-enhanced page must be complete, legible and beautiful on its own — and you must check it at 390px, not just in desktop Firefox.**
 2. Never use the JS `ScrollTimeline`/`ViewTimeline` constructors. They are worse-supported than the CSS. Use CSS + `@supports`, and `IntersectionObserver` for the fallback tier.
 3. Never reach for the `scroll-timeline` polyfill on a client site — it re-introduces main-thread scroll work, which is the exact thing we're avoiding.
 
@@ -35,11 +35,11 @@ TIER 1  Base CSS       Final resting state. No transform, full opacity. Works ev
                        including no-JS, no-CSS-animation, print, and crawlers.
 TIER 2  @supports      Scroll-driven enhancement for Chrome/Edge/Safari. Sets the "before"
                        state and hands it to the compositor.
-TIER 3  IntersectionObserver  Optional one-shot entrance for Tier-1 browsers (Firefox).
-                       Cheap, universal, no scrubbing.
+TIER 3  IntersectionObserver  Optional one-shot entrance for Tier-1 browsers (pre-26 Safari,
+                       Firefox stable). Cheap, universal, no scrubbing.
 ```
 
-The critical rule: **the "hidden" starting state is only ever applied inside `@supports` or by JS after it has confirmed it can also un-hide.** If you write `opacity: 0` in the base layer, Firefox users get a blank page. This is the single most common way agencies ship a broken site.
+The critical rule: **the "hidden" starting state is only ever applied inside `@supports` or by JS after it has confirmed it can also un-hide.** If you write `opacity: 0` in the base layer, every pre-26 Safari and Firefox visitor gets a blank page. This is the single most common way agencies ship a broken site.
 
 ```css
 /* CORRECT — hidden state is scoped to browsers that can un-hide it */
@@ -50,7 +50,7 @@ The critical rule: **the "hidden" starting state is only ever applied inside `@s
 ```
 
 ```css
-/* WRONG — Firefox shows a permanently empty section */
+/* WRONG — non-supporting browsers show a permanently empty section */
 .reveal { opacity: 0; }
 @supports (animation-timeline: view()) { .reveal { animation: … } }
 ```
@@ -71,7 +71,18 @@ The critical rule: **the "hidden" starting state is only ever applied inside `@s
 - **Dividing by a `var()` inside `calc()`** — `calc(var(--i) / (var(--n) - 1) * 100%)` — is CSS Values 4 and
   works in all three engines today. It is what makes the `--i` / `--n` index pattern in §4, §6, §9 and §11
   possible without JS. Just never let the divisor reach zero: guard single-item cases (`--n: 1`) in markup.
+- **`clip-path` on a target makes `IntersectionObserver` blind to it — this deadlocks the Tier-3 pattern.**
+  IO computes the intersection rect *after* clipping, so an element hidden with
+  `clip-path: inset(0 0 100% 0)` reports `intersectionRatio: 0` and `isIntersecting: false` **no matter
+  where it is on screen**. The observer that was supposed to un-hide it therefore never fires, and the
+  element stays invisible forever. Measured: three `.unmask` tiles sitting at `top: 255px` in a 720px
+  viewport, all reporting ratio `0`. `opacity: 0` and `transform` do **not** have this problem — only
+  clipping does. **Never observe the element you clipped.** Put the clip on an inner element and observe
+  the unclipped wrapper (§10).
 - `will-change` is a last resort, not a default. Scroll-driven animations are already composited off the main thread; adding `will-change: transform` to 40 cards costs you memory and can *reduce* framerate.
+- **Percentage-sized flex/grid children need `box-sizing: border-box` before any `calc()` travel formula
+  is trustworthy.** With the CSS default (`content-box`), `flex: 0 0 74vw` plus `padding: 1.5rem` gives a
+  995px panel, not a 947px one — and a five-panel track then overshoots your arithmetic by 240px (§7).
 
 ### 0.4 Reduced motion — non-negotiable
 
@@ -92,6 +103,34 @@ Ship this global block once, then let individual effects opt into a calmer varia
   .reveal, .reveal > *, [data-reveal] { opacity: 1 !important; transform: none !important; clip-path: none !important; }
 }
 ```
+
+#### The invariant that block imposes — read it, it has bitten every effect below
+
+That block does **not** delete your animations. It converts each one into a **0.001 ms time-based
+animation with `both` fill**, which means every scroll-driven animation **snaps instantly to its `to`
+keyframe and stays there.** (Verified in Chromium: a `view()`-timeline animation under
+`prefers-reduced-motion: reduce` computes `animation-timeline: auto`, `animation-duration: 1e-06s`,
+and lands exactly on its final keyframe.)
+
+> **Rule: a scrubbed keyframe whose `to` state is not the desired resting state MUST be gated by
+> `@media (prefers-reduced-motion: no-preference)` — the §0.4 block alone will not save it.**
+
+This is not theoretical. Take §4's `step-through`, which ends at `opacity: 0`:
+
+```css
+/* BROKEN under reduced motion: snaps to `to`, i.e. opacity 0 — a blank pinned section. */
+.steps__item { opacity: 0; animation: step-through linear both; animation-timeline: --stage; }
+@keyframes step-through { 0% { opacity: 0 } 25%,75% { opacity: 1 } 100% { opacity: 0 } }
+```
+
+Measured with reduced motion forced on, all four steps sit at `opacity: 0` — the user scrolls through
+a pinned, empty viewport. §4 below is correct only because it wraps the whole Tier-2 block in
+`no-preference`. The keyframes in this file that end in a non-resting state, and therefore *must* stay
+gated or explicitly overridden, are: **`step-through` (ends transparent), `ba-wipe` (ends fully clipped
+away), `spin` (ends rotated), `seq-step` (ends on the last frame), `plx-drift` (ends displaced),
+`spiral-turn` (ends translated)**. Everything else (`zoom-settle`, `tilt`, `rt-rise`, `cascade-in`,
+`split-assemble`, `wipe-mask`, `wipe-inner`, `unmask-up`, `step-bar`) ends in its resting state and is
+safe under the global block alone.
 
 Reduced motion does **not** mean "no design". It means: no travel, no parallax, no scrub. Cross-fades under ~150 ms and colour changes are still acceptable and keep the page feeling alive. Several effects below define a reduced-motion *substitute* rather than nothing.
 
@@ -123,7 +162,9 @@ export function revealOnce(selector, { threshold = 0.15, rootMargin = '0px 0px -
   return () => io.disconnect();
 }
 
-/** True when the browser can run CSS scroll-driven animations. */
+/** True when the browser can run CSS scroll-driven animations.
+ *  Prefer the CSS `@supports` gate for styling — reach for this only when JS must branch
+ *  (e.g. skipping a canvas preload). Don't use it to duplicate a gate CSS already handles. */
 export const HAS_SDA = CSS.supports('animation-timeline: view()');
 
 export const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -214,15 +255,19 @@ CSS:
   vertical-align: bottom;      /* stops descenders being clipped */
   padding-bottom: 0.08em;      /* breathing room for g, y, p */
 }
-.rt-i { display: inline-block; will-change: auto; }
+.rt-i { display: inline-block; }
 
-/* ---- TIER 3: one-shot entrance, works in every browser incl. Firefox ---- */
+/* ---- TIER 3: one-shot entrance, works in every non-supporting browser ---- */
+/* The delay is computed IN CSS from --i and --rt-stagger. Do not let JS write a
+   resolved millisecond value: that is what silently breaks the mobile override below,
+   because a hardcoded JS delay ignores any media query you write for --rt-stagger. */
 .reveal-text[data-ready] .rt-i {
+  --rt-delay: calc(var(--i, 0) * var(--rt-stagger));
   transform: translateY(var(--rt-rise));
   opacity: 0;
   transition:
-    transform var(--rt-dur) cubic-bezier(.22,.61,.36,1) var(--rt-delay, 0ms),
-    opacity   calc(var(--rt-dur) * .6) linear var(--rt-delay, 0ms);
+    transform var(--rt-dur) cubic-bezier(.22,.61,.36,1) var(--rt-delay),
+    opacity   calc(var(--rt-dur) * .6) linear var(--rt-delay);
 }
 .reveal-text[data-ready].is-in .rt-i { transform: translateY(0); opacity: 1; }
 
@@ -248,7 +293,9 @@ JS splitter — the only part CSS cannot do:
 ```js
 /* split.js — wraps words, then optionally regroups them into real line boxes. */
 export function splitText(el) {
-  if (el.dataset.ready) return;                       // idempotent
+  // NB: `el.dataset.ready` is the EMPTY STRING once armed, which is falsy — a plain
+  // truthiness check here is not a guard at all and will happily re-split. Compare to undefined.
+  if (el.dataset.ready !== undefined) return;         // idempotent
   const mode = el.dataset.split || 'words';
   const source = el.textContent.trim();
   el.setAttribute('aria-label', source);              // screen readers read the whole string…
@@ -292,11 +339,9 @@ export function splitText(el) {
     });
   }
 
-  // 3. Index each unit for the stagger.
-  [...el.querySelectorAll('.rt-i')].forEach((n, i) => {
-    n.style.setProperty('--i', i);
-    n.style.setProperty('--rt-delay', `${i * 55}ms`);
-  });
+  // 3. Index each unit. Set ONLY --i; the delay is derived in CSS from --rt-stagger so that
+  //    the mobile media query in (e) actually has something to override.
+  [...el.querySelectorAll('.rt-i')].forEach((n, i) => n.style.setProperty('--i', i));
   el.dataset.ready = '';                              // only now is the hidden state allowed
 }
 
@@ -332,6 +377,10 @@ late, which feels broken on a small screen.
 ```css
 @media (max-width: 640px) { .reveal-text { --rt-rise: .5em; --rt-stagger: 30ms; } }
 ```
+
+This override **only works because the delay is `calc(var(--i) * var(--rt-stagger))` in CSS.** If you let
+the splitter write `--rt-delay: 55ms` per element (the obvious implementation, and the one to avoid), the
+inline style wins and this media query is dead code that looks like a fallback but changes nothing.
 
 **(f) Reduced motion.** The global block in §0.4 handles it, and the JS above never even splits the text —
 so the DOM stays a plain heading. That is the correct outcome: nothing to un-hide, nothing to break.
@@ -405,7 +454,7 @@ so pair with `object-position`.
 @media (max-width: 640px) { .zoom { --zoom-from: 1.06; } }
 ```
 
-Tier-1 browsers (Firefox) simply get the image at `scale(1)`. Nothing is missing — this is the ideal case
+Tier-1 browsers (pre-26 Safari, Firefox) simply get the image at `scale(1)`. Nothing is missing — this is the ideal case
 for skipping the Tier-3 IO fallback entirely.
 
 **(f) Reduced motion.**
@@ -705,7 +754,9 @@ feels like the scrollbar is broken. Never nest two stages. Never pin on very sho
 
 ```css
 .steps { --n: 4; }
-.stage__pin { display: grid; place-items: center; gap: 2rem; }
+/* Scope pin tweaks to THIS effect. A bare `.stage__pin { gap: 2rem }` leaks onto every other
+   stage on the page (§3, §6, §7, §9) and quietly shifts their pinned layouts. */
+.steps .stage__pin { gap: 2rem; }
 .steps__list {
   display: grid;
   list-style: none; margin: 0; padding: 0;
@@ -725,10 +776,16 @@ feels like the scrollbar is broken. Never nest two stages. Never pin on very sho
       opacity: 0;
       animation: step-through linear both;
       animation-timeline: --stage;                  /* declared by .stage, inherited by descendants */
-      /* Each item owns a 1/n slice of the pinned range. Stagger via range, never delay. */
+      /* Ranges must OVERLAP, or the cross-fade is not a cross-fade.
+         With naive non-overlapping 1/n slices, at every boundary the outgoing item sits at
+         100% of its range (opacity 0) and the incoming item at 0% of its range (also opacity 0)
+         — measured total opacity across all four items at `contain 75%` was exactly 0.00,
+         i.e. a pinned viewport with nothing in it. Each item instead spans 1.5 slices, and the
+         sequence is scaled by (n + 0.5) so item 0 still starts at 0% and item n-1 ends at 100%.
+         Overlap is then exactly 0.5 slices — the fade-out of N and the fade-in of N+1 coincide. */
       animation-range:
-        contain calc(var(--i) / var(--n) * 100%)
-        contain calc((var(--i) + 1) / var(--n) * 100%);
+        contain calc(var(--i) / (var(--n) + 0.5) * 100%)
+        contain calc((var(--i) + 1.5) / (var(--n) + 0.5) * 100%);
     }
     /* Progress rule that fills as you scroll — pure transform, no width animation. */
     .steps__list::after {
@@ -741,12 +798,15 @@ feels like the scrollbar is broken. Never nest two stages. Never pin on very sho
     }
   }
 }
-/* Fade in over the first 25% of its slice, hold, fade out over the last 25%. */
+/* 33.34 / 66.66 are not arbitrary: with a 1.5-slice range, one third of it is exactly the
+   0.5-slice overlap, so the fade-out of item N lines up frame-for-frame with the fade-in of
+   item N+1. Measured total opacity is 1.00 at every seam. Changing the range multiplier
+   without changing these two stops reintroduces the blank frame. */
 @keyframes step-through {
-  0%   { opacity: 0; transform: translateY(1.25rem); }
-  25%  { opacity: 1; transform: translateY(0); }
-  75%  { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(-1.25rem); }
+  0%     { opacity: 0; transform: translateY(1.25rem); }
+  33.34% { opacity: 1; transform: translateY(0); }
+  66.66% { opacity: 1; transform: translateY(0); }
+  100%   { opacity: 0; transform: translateY(-1.25rem); }
 }
 @keyframes step-bar { to { transform: scaleX(1); } }
 ```
@@ -841,12 +901,13 @@ and it reads as amateur. Never rotate a photo of a person or a building past a f
 Note the use of the independent `rotate:` / `translate:` / `scale:` properties rather than `transform:` —
 they compose without you having to restate the whole transform list, and they are GPU-composited identically.
 
-**(g) Note on `scroll(root)`:** an element animated on the root timeline animates for the *entire page*.
+**Note on `scroll(root)`:** an element animated on the root timeline animates for the *entire page*.
 That's what you want for an ambient seal, but it means the element is doing compositor work at every scroll
-position. One such element per page, maximum.
+position. One such element per page, maximum. Note also that `spin` ends on a *rotated* state, so it is one
+of the keyframes that must keep its explicit reduced-motion override in (f) — see §0.4.
 
 **(e) Mobile fallback.** Reduce the turn — a full rotation on a small screen is distracting next to text.
-Firefox (Tier 1) gets a static seal, which loses nothing.
+Tier-1 browsers get a static seal, which loses nothing.
 
 ```css
 @media (max-width: 640px) { .seal { --seal-turn: 45deg; } }
@@ -1035,9 +1096,20 @@ Always keep panels reachable and the section skippable.
 ```
 
 ```css
+/* REQUIRED. The travel arithmetic below is only correct in border-box.
+   Under the CSS default (content-box), `flex: 0 0 74vw` + `padding: 1.5rem` measures 995px,
+   not 947px — five of those overshoot --track by 240px, --travel undershoots by the same
+   amount, and the last panel is left hanging off the right edge at the end of the pin.
+   Measured: track 5206px vs the formula's 4966px; panel 5 finished at x=1469 in a 1280 viewport. */
+.hscroll, .hscroll * { box-sizing: border-box; }
+
 .hscroll {
   --n: 5;                                   /* panel count */
-  --panel: 74vw;                            /* panel width */
+  /* Panel width. Keep the pin under ~4 viewport-heights (see §7c and §4c) — at 74vw with five
+     panels the stage computes to 4406px on a 1280x720 screen, i.e. 6.1 viewports of pinned
+     scrolling, which is past the point where the scrollbar feels broken. 44vw is the honest
+     desktop default; give phones the wider panel, since they get the native scroller anyway. */
+  --panel: 44vw;
   --gap: 2rem;
   --edge: 4vw;                              /* leading inset */
   /* Track and travel are pure arithmetic — no JS measurement needed. */
@@ -1046,6 +1118,7 @@ Always keep panels reachable and the section skippable.
   /* 1:1 mapping: pinned duration equals the distance travelled. Feels perfectly weighted. */
   --stage-h: calc(100svh + var(--travel));
 }
+@media (max-width: 899px), (pointer: coarse) { .hscroll { --panel: 76vw; } }
 
 /* ---- TIER 1 / MOBILE: a real, native, snapping horizontal scroller. ----
    This is not a degraded experience — on touch it is the BETTER one. */
@@ -1074,6 +1147,10 @@ Always keep panels reachable and the section skippable.
 /* ---- TIER 2: scroll-driven horizontal translate, desktop + supporting browsers only ---- */
 @supports (animation-timeline: --stage) {
   @media (prefers-reduced-motion: no-preference) and (min-width: 900px) and (pointer: fine) {
+    /* Pin the track to the START edge. `place-items: center` on .stage__pin would centre a
+       max-content track, so panel 1 would not begin at the left edge and the travel maths
+       (which assumes a left-aligned origin) would be off by half the overflow. */
+    .hscroll .stage__pin { place-items: center start; }
     .hscroll__track {
       overflow: visible;                    /* hand control to the scroll timeline */
       scroll-snap-type: none;
@@ -1095,12 +1172,20 @@ Accessibility guard — keep keyboard focus from fighting the pin:
 ```js
 /* If a panel receives focus while pinned, scroll the page to the position that shows it. */
 const stage = document.querySelector('.hscroll');
+const pin = stage?.querySelector('.stage__pin');
 stage?.addEventListener('focusin', (e) => {
   const panel = e.target.closest('.hscroll__panel');
-  if (!panel || getComputedStyle(stage).height === 'auto') return;
-  const idx = [...panel.parentElement.children].indexOf(panel);
+  if (!panel) return;
+  // Only intervene when the section is ACTUALLY pinned. Do not test the stage's height for
+  // 'auto': getComputedStyle always resolves height to a used pixel value, so that check can
+  // never be true — it reads like a guard but is dead code, and the handler then fires on
+  // mobile too (where the section is unpinned) and yanks the page for no reason.
+  if (getComputedStyle(pin).position !== 'sticky') return;
+  const kids = panel.parentElement.children;
   const total = stage.offsetHeight - innerHeight;
-  const y = stage.offsetTop + (idx / (panel.parentElement.children.length - 1)) * total;
+  if (total <= 0 || kids.length < 2) return;
+  const idx = [...kids].indexOf(panel);
+  const y = stage.offsetTop + (idx / (kids.length - 1)) * total;
   scrollTo({ top: y, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
 });
 ```
@@ -1266,9 +1351,12 @@ where the image needs to be perceived accurately (before/after comparisons — u
 **(d) Code.**
 
 ```html
-<section class="stage split" style="--stage-h: 260vh">
+<!-- --n lives on the SECTION, not on .split__fig. Putting it in an inline style on the figure
+     makes the mobile media query below unable to override it (inline beats any stylesheet
+     rule short of !important) — see (e). --img is fine inline; nothing overrides it. -->
+<section class="stage split" style="--stage-h: 260vh; --n: 5">
   <div class="stage__pin">
-    <figure class="split__fig" style="--n: 5; --img: url('/img/kitchen.avif')">
+    <figure class="split__fig" style="--img: url('/img/kitchen.avif')">
       <div class="split__panel" style="--i:0"></div>
       <div class="split__panel" style="--i:1"></div>
       <div class="split__panel" style="--i:2"></div>
@@ -1345,12 +1433,20 @@ like a broken image.
 
 ```css
 @media (max-width: 640px) {
-  .split__fig { --n: 3; }
+  .split { --n: 3; }                                /* on the SECTION — see the HTML note above */
   .split__panel:nth-child(n+4) { display: none; }   /* hide the extra markup panels */
 }
 ```
-Set `--n: 3` and only three panels participate — the maths adapts automatically because everything is
-expressed in terms of `--n` and `--i`.
+Set `--n: 3` and only three panels participate — the maths adapts because everything is expressed in
+terms of `--n` and `--i`.
+
+> **This is the fallback most likely to be silently dead in your build.** If `--n` is written as an
+> inline `style="--n: 5"` on the figure (the natural place to put it), this media query loses on
+> specificity and never applies. Measured at 375px with `--n` inline: the grid still laid out **five**
+> 69px columns while only three panels were `display: block`, leaving 40% of the figure empty and the
+> sprite maths showing only the left 60% of the photograph. It renders as a broken image, not as a
+> degraded effect. Either declare `--n` on the section as above, or use `--n: 3 !important`, and
+> **verify the computed value at 375px** rather than assuming.
 
 **(f) Reduced motion.** Gated by `no-preference`, so the panels never activate and the plain `<img>` shows.
 That is the whole point of putting the real image in Tier 1. Collapse the runway too:
@@ -1415,27 +1511,49 @@ Preferred, pure-compositor wipe (straight edges):
 
 `clip-path` version — for shapes a rectangle can't express:
 
+> **The one thing you must get right here: the clipped element and the observed element cannot be the
+> same element.** `IntersectionObserver` computes its rect after clipping, so an element carrying
+> `clip-path: inset(0 0 100% 0)` reports `intersectionRatio: 0` wherever it sits — the observer never
+> fires, `.is-in` is never added, and the tile is **invisible forever**. This was measured: three tiles
+> at `top: 255px` in a 720px viewport, ratio `0` on all three, still clipped after a full-page scroll at
+> both 1280px and 375px. So the markup needs two boxes: an outer one to observe, an inner one to clip.
+
+```html
+<!-- .unmask is the OBSERVED box and is never clipped. .unmask__inner carries the clip. -->
+<div class="unmask">
+  <div class="unmask__inner">
+    <img src="/img/facade.avif" alt="Restored Georgian façade, Bath" width="1400" height="900">
+  </div>
+</div>
+<div class="unmask unmask--diagonal"><div class="unmask__inner">…</div></div>
+<div class="unmask unmask--iris"><div class="unmask__inner">…</div></div>
+```
+
 ```css
-.unmask { --unmask-ease: cubic-bezier(.65,0,.35,1); }
+.unmask { --unmask-ease: cubic-bezier(.65,0,.35,1); display: block; }
+.unmask__inner { display: block; }
+.unmask__inner img { display: block; width: 100%; height: auto; }
+/* TIER 1 is the absence of a rule: no clip until JS arms `data-ready`. */
 
-/* TIER 1: fully visible. */
-.unmask { clip-path: none; }
-
-/* TIER 3: one-shot on enter, universal (works in Firefox). */
-.unmask[data-ready] { clip-path: inset(0 0 100% 0); transition: clip-path 900ms var(--unmask-ease); }
-.unmask[data-ready].is-in { clip-path: inset(0 0 0 0); }
+/* TIER 3: one-shot on enter, universal. */
+.unmask[data-ready] .unmask__inner {
+  clip-path: inset(0 0 100% 0);
+  transition: clip-path 900ms var(--unmask-ease);
+}
+.unmask[data-ready].is-in .unmask__inner { clip-path: inset(0 0 0 0); }
 
 /* Diagonal wipe — a polygon, so clip-path is genuinely required. */
-.unmask--diagonal[data-ready]        { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); }
-.unmask--diagonal[data-ready].is-in  { clip-path: polygon(0 0, 130% 0, 100% 100%, 0 100%); }
+.unmask--diagonal[data-ready] .unmask__inner       { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); }
+.unmask--diagonal[data-ready].is-in .unmask__inner { clip-path: polygon(0 0, 130% 0, 100% 100%, 0 100%); }
 
 /* Circular reveal from a focal point. */
-.unmask--iris[data-ready]       { clip-path: circle(0% at 50% 55%); }
-.unmask--iris[data-ready].is-in { clip-path: circle(85% at 50% 55%); }
+.unmask--iris[data-ready] .unmask__inner       { clip-path: circle(0% at 50% 55%); }
+.unmask--iris[data-ready].is-in .unmask__inner { clip-path: circle(85% at 50% 55%); }
 
-/* TIER 2: scrub the clip to scroll instead. */
+/* TIER 2: scrub the clip to scroll instead. A scroll timeline needs no observer, so here the
+   clip may sit on the element itself — the deadlock above is an IntersectionObserver problem only. */
 @supports (animation-timeline: view()) {
-  .unmask[data-scrub] {
+  .unmask[data-scrub] .unmask__inner {
     clip-path: inset(0 0 100% 0);
     animation: unmask-up linear both;
     animation-timeline: view();
@@ -1443,6 +1561,20 @@ Preferred, pure-compositor wipe (straight edges):
   }
 }
 @keyframes unmask-up { to { clip-path: inset(0 0 0% 0); } }
+```
+
+Wire-up — **required; without it nothing in the block above ever applies**, because `revealOnce()`
+only adds `.is-in` and never sets `data-ready`:
+
+```js
+import { revealOnce } from './motion.js';
+
+// Arm the hidden state only when we intend to animate. Under reduced motion we skip this
+// entirely, so no clip is ever set and there is nothing to unwind.
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  document.querySelectorAll('.unmask').forEach(el => { el.dataset.ready = ''; });
+}
+revealOnce('.unmask');   // observes .unmask — the unclipped outer box
 ```
 
 Before/after wipe — a real utility, not decoration:
@@ -1470,24 +1602,27 @@ Before/after wipe — a real utility, not decoration:
 ```
 
 **(e) Mobile fallback.** Shorten the duration (900ms → 600ms) and prefer vertical wipes over diagonal — a
-diagonal across a narrow column exposes a lot of empty space mid-animation. Firefox (Tier 1) gets the
+diagonal across a narrow column exposes a lot of empty space mid-animation. Tier-1 browsers get the
 `data-ready` transition path via `revealOnce()`, so it is fully covered here.
 
 ```css
 @media (max-width: 640px) {
   .unmask { --unmask-ease: cubic-bezier(.33,1,.68,1); }
-  .unmask[data-ready] { transition-duration: 600ms; }
-  .unmask--diagonal[data-ready] { clip-path: inset(0 0 100% 0); }   /* downgrade diagonal to vertical */
-  .unmask--diagonal[data-ready].is-in { clip-path: inset(0 0 0 0); }
+  .unmask[data-ready] .unmask__inner { transition-duration: 600ms; }
+  /* downgrade diagonal to vertical */
+  .unmask--diagonal[data-ready] .unmask__inner       { clip-path: inset(0 0 100% 0); }
+  .unmask--diagonal[data-ready].is-in .unmask__inner { clip-path: inset(0 0 0 0); }
 }
 ```
 
-**(f) Reduced motion.** `revealOnce()` (§0.5) adds `.is-in` immediately without ever setting `data-ready`,
-so no clip is applied at all. Plus the global override:
+**(f) Reduced motion.** The wire-up above never sets `data-ready`, so no clip rule ever matches and the
+content is simply present; `revealOnce()` short-circuits and adds `.is-in` immediately. Plus the global
+override, which matters because `ba-wipe` ends at `inset(0 0 0 100%)` — fully clipped away — and would
+otherwise snap to that final keyframe and erase the "before" image (see §0.4):
 
 ```css
 @media (prefers-reduced-motion: reduce) {
-  .unmask, .wipe__mask, .wipe__mask img, .ba__before {
+  .unmask__inner, .wipe__mask, .wipe__mask img, .ba__before {
     clip-path: none !important; transform: none !important;
     animation: none !important; transition: none !important;
   }
@@ -1531,8 +1666,11 @@ observer) — repeated entrances make a page feel unstable.
 ```css
 .cascade {
   --cascade-step: 70ms;
-  --cascade-max: 8;                 /* index cap: item 9+ shares item 8's timing */
   --cascade-rise: 1.5rem;
+  /* NB: there is deliberately no `--cascade-max` custom property here. The index cap has to be
+     applied where --i is written (the JS below), and a CSS variable that nothing reads is worse
+     than no variable — it looks like a knob, so a media query "overriding" it silently does
+     nothing. Same trap as --rt-stagger in §1; cap it in JS, or hand-author --i in the markup. */
   list-style: none; margin: 0; padding: 0;
   display: grid; gap: 1.25rem;
   grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
@@ -1544,7 +1682,7 @@ observer) — repeated entrances make a page feel unstable.
 .cascade__item h3 { margin: 0 0 .35rem; }
 .cascade__item p  { margin: 0; opacity: .75; }
 
-/* TIER 3 (universal, incl. Firefox): one-shot cascade driven by IntersectionObserver.
+/* TIER 3 (universal): one-shot cascade driven by IntersectionObserver.
    --i is set by JS, or by hand in the HTML if you prefer zero JS on this component. */
 .cascade[data-ready] .cascade__item {
   opacity: 0;
@@ -1575,7 +1713,7 @@ observer) — repeated entrances make a page feel unstable.
    and the group reads as a single gesture instead of six unrelated ones. */
 import { revealOnce } from './motion.js';
 
-const MAX = 8;
+const MAX = matchMedia('(max-width: 640px)').matches ? 5 : 8;   // the cap lives here, not in CSS
 document.querySelectorAll('.cascade').forEach(group => {
   [...group.children].forEach((el, i) => el.style.setProperty('--i', Math.min(i, MAX)));
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) group.dataset.ready = '';
@@ -1588,9 +1726,13 @@ lands 420 ms after item 1 — visible as a slow drip. Tighten it and shorten the
 
 ```css
 @media (max-width: 640px) {
-  .cascade { --cascade-step: 40ms; --cascade-max: 5; --cascade-rise: .875rem; }
+  .cascade { --cascade-step: 40ms; --cascade-rise: .875rem; }
 }
 ```
+
+The step and the rise are genuine CSS knobs and this override works. The *index cap* is not a CSS knob —
+to tighten it on mobile you must change the cap in the JS (read `matchMedia('(max-width: 640px)')` when
+computing `MAX`), because `--i` is already a resolved number by the time CSS sees it.
 
 **(f) Reduced motion.** The JS never sets `data-ready`, so the hidden state is never applied — items are
 simply present. `revealOnce()` also short-circuits and adds `.is-in` immediately. Nothing to unwind.
@@ -1628,7 +1770,20 @@ State the reason explicitly or don't add it.
 ## 13. Pre-ship checklist
 
 - [ ] Every "hidden" state lives inside `@supports` or behind a JS-set `data-ready` attribute.
-- [ ] Tested with Firefox stable (or `CSS.supports` forced false) — page is complete and beautiful.
+- [ ] **No element is both clipped and observed.** If an `IntersectionObserver` target carries a
+      `clip-path` hidden state, it will never fire and the element is invisible forever (§0.3, §10).
+- [ ] **Every scrubbed keyframe's `to` state equals the desired resting state** — or the effect is
+      wrapped in `@media (prefers-reduced-motion: no-preference)`. The §0.4 block snaps animations to
+      their final keyframe; it does not reset them (§0.4).
+- [ ] **Every custom property named in a mobile media query is actually read by CSS.** A `--foo` that
+      only JS consumes makes the override dead code that looks like a fallback (§1e, §11e).
+- [ ] **No `--n`-style geometry variable is set in an inline `style=` attribute** if a media query needs
+      to override it — inline wins, and the responsive fallback silently does nothing (§9e).
+- [ ] `box-sizing: border-box` is in force anywhere a `calc()` travel/track formula is used (§7).
+- [ ] Cross-fading sequences checked at the *seams*, not just mid-slice: total opacity across the group
+      never dips toward 0 between steps (§4).
+- [ ] Tested with `CSS.supports` forced false (or Firefox stable, or Safari 18) — page is complete and beautiful.
+- [ ] That same no-scroll-timeline test repeated **at 390px**, since most of that cohort is mobile Safari.
 - [ ] Tested with JS disabled — all content present.
 - [ ] Tested with `prefers-reduced-motion: reduce` forced on — no travel, no scrub, no parallax, all runways collapsed.
 - [ ] `animation-timeline` / `animation-range` declared *after* every `animation` shorthand.

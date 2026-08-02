@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="tp-title tp-desc"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title id="tp-title">Wiring loom</title>
+  <desc id="tp-desc">A vehicle wiring harness: a connector block, a main trunk bundle and four branch runs terminating in sensor nodes.</desc>
+  <g class="tp" style="--n:12">
+    <path class="tp-ln" pathLength="1" style="--i:0" d="M8 108h20v24H8z"/>
+    <path class="tp-ln" pathLength="1" style="--i:1" d="M13 113v14M18 113v14M23 113v14"/>
+    <path class="tp-ln" pathLength="1" style="--i:2" d="M28 120C66 120 68 96 96 96s36-32 72-32h18"/>
+    <path class="tp-ln" pathLength="1" style="--i:3" d="M186 56h14v16h-14z"/>
+    <path class="tp-ln" pathLength="1" style="--i:4" d="M61 108c-5-16-13-22-23-26"/>
+    <circle class="tp-ln" pathLength="1" style="--i:5" cx="34" cy="80" r="4.5"/>
+    <path class="tp-ln" pathLength="1" style="--i:6" d="M96 96c0 16 8 24 20 28"/>
+    <circle class="tp-ln" pathLength="1" style="--i:7" cx="120" cy="126" r="4.5"/>
+    <path class="tp-ln" pathLength="1" style="--i:8" d="M130 80c2-20 10-30 22-36"/>
+    <circle class="tp-ln" pathLength="1" style="--i:9" cx="156" cy="42" r="4.5"/>
+    <path class="tp-ln" pathLength="1" style="--i:10" d="M172 64c0 20-6 30-16 38"/>
+    <circle class="tp-ln" pathLength="1" style="--i:11" cx="152" cy="105" r="4.5"/>
+  </g>
+</svg>

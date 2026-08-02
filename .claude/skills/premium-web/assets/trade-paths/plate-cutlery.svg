@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="tp-title tp-desc"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title id="tp-title">Plate and cutlery</title>
+  <desc id="tp-desc">A place setting: a rimmed plate with a fork on the left and a table knife on the right.</desc>
+  <g class="tp" style="--n:7">
+    <circle class="tp-ln" pathLength="1" style="--i:0" cx="120" cy="80" r="48"/>
+    <circle class="tp-ln" pathLength="1" style="--i:1" cx="120" cy="80" r="35"/>
+    <path class="tp-ln" pathLength="1" style="--i:2" d="M40 34v20c0 8 5 12 12 12s12-4 12-12V34"/>
+    <path class="tp-ln" pathLength="1" style="--i:3" d="M52 34v20"/>
+    <path class="tp-ln" pathLength="1" style="--i:4" d="M48 66h8v52a4 4 0 0 1-8 0z"/>
+    <path class="tp-ln" pathLength="1" style="--i:5" d="M184 32c9 8 12 22 12 36 0 6-4 10-11 10h-1V32z"/>
+    <path class="tp-ln" pathLength="1" style="--i:6" d="M182 78h8v40a4 4 0 0 1-8 0z"/>
+  </g>
+</svg>

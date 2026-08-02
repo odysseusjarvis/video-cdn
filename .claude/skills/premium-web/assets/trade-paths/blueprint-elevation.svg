@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="tp-title tp-desc"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title id="tp-title">Building elevation</title>
+  <desc id="tp-desc">A blueprint front elevation: ground line, walls, pitched roof, chimney, door, two mullioned windows and a dimension line.</desc>
+  <g class="tp" style="--n:11">
+    <path class="tp-ln" pathLength="1" style="--i:0" d="M12 140h216"/>
+    <path class="tp-ln" pathLength="1" style="--i:1" d="M44 140V76h152v64"/>
+    <path class="tp-ln" pathLength="1" style="--i:2" d="M36 76 120 34l84 42"/>
+    <path class="tp-ln" pathLength="1" style="--i:3" d="M166 58V30h12v35"/>
+    <path class="tp-ln" pathLength="1" style="--i:4" d="M108 140v-36h24v36"/>
+    <path class="tp-ln" pathLength="1" style="--i:5" d="M60 96h28v24H60z"/>
+    <path class="tp-ln" pathLength="1" style="--i:6" d="M74 96v24M60 108h28"/>
+    <path class="tp-ln" pathLength="1" style="--i:7" d="M152 96h28v24h-28z"/>
+    <path class="tp-ln" pathLength="1" style="--i:8" d="M166 96v24M152 108h28"/>
+    <path class="tp-ln" pathLength="1" style="--i:9" d="M44 152h152"/>
+    <path class="tp-ln" pathLength="1" style="--i:10" d="M44 147v10M196 147v10"/>
+  </g>
+</svg>

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="tp-title tp-desc"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title id="tp-title">Floor plan</title>
+  <desc id="tp-desc">An architectural floor plan: outer walls, two internal partitions, two door swings, a staircase and a dimension line.</desc>
+  <g class="tp" style="--n:17">
+    <path class="tp-ln" pathLength="1" style="--i:0" d="M24 28h32M88 28h60M184 28h32"/>
+    <path class="tp-ln" pathLength="1" style="--i:1" d="M216 28v104M216 132H24"/>
+    <path class="tp-ln" pathLength="1" style="--i:2" d="M24 132V88M24 56V28"/>
+    <path class="tp-ln" pathLength="1" style="--i:3" d="M116 28v50M116 98v34"/>
+    <path class="tp-ln" pathLength="1" style="--i:4" d="M116 80h56M192 80h24"/>
+    <path class="tp-ln" pathLength="1" style="--i:5" d="M116 98h-20"/>
+    <path class="tp-ln" pathLength="1" style="--i:6" d="M116 78a20 20 0 0 0-20 20"/>
+    <path class="tp-ln" pathLength="1" style="--i:7" d="M172 80V60"/>
+    <path class="tp-ln" pathLength="1" style="--i:8" d="M192 80a20 20 0 0 0-20-20"/>
+    <path class="tp-ln" pathLength="1" style="--i:9" d="M34 100h58v28H34z"/>
+    <path class="tp-ln" pathLength="1" style="--i:10" d="M34 105h58M34 110h58M34 115h58M34 120h58M34 125h58"/>
+    <path class="tp-ln" pathLength="1" style="--i:11" d="M63 126v-22m-4 5 4-5 4 5"/>
+    <path class="tp-ln" pathLength="1" style="--i:12" d="M56 26h32M56 30h32"/>
+    <path class="tp-ln" pathLength="1" style="--i:13" d="M148 26h36M148 30h36"/>
+    <path class="tp-ln" pathLength="1" style="--i:14" d="M22 56v32M26 56v32"/>
+    <path class="tp-ln" pathLength="1" style="--i:15" d="M24 146h192"/>
+    <path class="tp-ln" pathLength="1" style="--i:16" d="M24 141v10M216 141v10"/>
+  </g>
+</svg>

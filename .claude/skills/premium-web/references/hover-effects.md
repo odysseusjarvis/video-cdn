@@ -75,8 +75,9 @@ mqReduce.addEventListener('change', rebuild); // re-init, don't cache the boolea
 
 ### Law 3 — The performance rule
 
-Animate `transform` and `opacity`. Nothing else, with three flagged exceptions that are called
-out where they occur:
+Animate `transform` and `opacity` (or the independent `translate`/`rotate`/`scale` — see #3 for
+when to prefer those). Nothing else, with four flagged exceptions that are called out where they
+occur:
 
 1. **SVG filters** (gooey #7, gooey dropdown #10, liquify #20) rasterise every frame. They are
    hero-moment-only, hover-only, desktop-only, and `filter: none` at rest so idle cost is zero.
@@ -85,6 +86,8 @@ out where they occur:
    instead (#5).
 3. **1px border-colour transitions** on form fields (#15). One element, sub-pixel repaint —
    acceptable, and there is no transform equivalent that reads as correct.
+4. **An 18px inset `box-shadow` offset** on the theme toggle's icon (#16). One element, one
+   click, 324 px² of repaint. A transform-only alternative is documented there.
 
 Never animate `width`, `height`, `top`, `left`, `margin`, `padding`, `box-shadow` spread, or
 `background-position`. Never set `will-change` globally; set it on `:hover`/`:focus-within` of
@@ -92,27 +95,53 @@ the specific element, or via JS immediately before an animation and remove it af
 
 ---
 
-## Verified browser support — checked 2026-08-02
+## Verified browser support — re-checked 2026-08-02 against webstatus.dev
 
-Do not trust older blog posts. Status as of today:
+Do not trust older blog posts — and do not trust an earlier revision of this file, which
+overstated three of these. Status as of today:
 
 | Feature | Status today | Guard required? |
 |---|---|---|
-| `popover` attribute | Baseline (Jan 2025), ~91% traffic | No |
-| `@starting-style`, `transition-behavior: allow-discrete` | Baseline newly available (Firefox 129) | No, degrades to no entry anim |
+| `popover` attribute | **Baseline newly available (2025-01-27)** — Chrome 116, Safari 17, Firefox 125 | No |
+| `@starting-style`, `transition-behavior: allow-discrete` | Baseline newly available (Firefox 129, Aug 2024) | No, degrades to no entry anim |
 | `@property` | Baseline newly available (Jul 2024); Widely available Jan 2027 | No, but write a plain `--var` fallback |
-| Same-document View Transitions (`document.startViewTransition`) | **Baseline newly available (Oct 2025)** — Chrome 111+, Firefox 133+, Safari 18+ | Feature-detect the function |
-| Cross-document View Transitions | Chrome 126+, Safari 18.2+, **no Firefox** | Yes |
-| CSS anchor positioning (`anchor-name`, `position-anchor`, `anchor()`) | Chrome 125+, Firefox 132+, Safari 18.2+ (`@position-try` needs 18.4+); ~85–91% | **Yes** — `@supports (anchor-name: --a)` |
-| Scroll-driven animations (`animation-timeline: scroll()/view()`) | **Not Baseline.** Chrome 115+, Firefox 132+, Safari 18+; ~84% | **Yes, always** — `@supports (animation-timeline: scroll())` |
+| Same-document View Transitions (`document.startViewTransition`) | **Baseline newly available (2025-10-14)** — Chrome 111, Safari 18, **Firefox 144** | Feature-detect the function |
+| Cross-document View Transitions | **Baseline: Limited.** Chrome 126, Safari 18.2, **no Firefox** | Yes |
+| `view-transition-class` / `::view-transition-group(.cls)` | **Chromium only.** No Firefox, no Safari | Yes — decoration only, never load-bearing |
+| CSS anchor positioning (`anchor-name`, `position-anchor`, `anchor()`) | **Baseline: Limited. Chromium only** (complete feature Chrome 144, Jan 2026). **No Firefox. No Safari.** | **Yes** — and see the warning below |
+| Scroll-driven animations (`animation-timeline: scroll()/view()`) | **Baseline: Limited.** Chrome 115 (Jul 2023), **Safari 26** (Sep 2025), **Firefox: not shipped** | **Yes, always** — `@supports (animation-timeline: scroll())` |
 | `:user-valid` / `:user-invalid` | Baseline widely available | No |
-| `:has()` | Baseline widely available | No |
-| `interestfor` / `interesttarget` (hover-triggered popovers, no JS) | **Experimental.** Chrome Canary behind a flag. Not shippable. | Use the JS recipe in #4 |
-| `::scroll-button()` / `::scroll-marker` CSS carousels | **Not Baseline.** Chrome 135+ only; Firefox & Safari in progress | Yes — progressive sugar on top of a scroll-snap base |
+| `:has()` | Baseline **widely** available (low 2023-12-19, high 2026-06-19) | No |
+| `interestfor` / `interesttarget` (hover-triggered popovers, no JS) | **Unverified at time of writing — do not ship on assumption.** Feature-detect with `'interestForElement' in HTMLButtonElement.prototype` | Use the JS recipe in #4 |
+| `::scroll-button()` / `::scroll-marker` CSS carousels | **Not Baseline.** Chromium only; Firefox & Safari in progress | Yes — progressive sugar on top of a scroll-snap base |
 | Web Animations API (`el.animate`, `getAnimations`) | Baseline widely available | No |
 | `linear()` easing (spring curves) | Baseline newly available | Falls back to `ease-out` |
 | Pointer Events, `setPointerCapture`, `getCoalescedEvents` | Baseline widely available | No |
 | SVG `feTurbulence` / `feDisplacementMap` / `feColorMatrix` | Universal since forever | No |
+
+> ### ⚠ Anchor positioning is the fallback, not the enhancement
+>
+> Anchor positioning is **Chromium-only today**. That inverts the usual reasoning: for Firefox and
+> Safari users — a large minority, not an edge case — the `@supports not (anchor-name: --a)` branch
+> in #4 and #10 is *the* code path, so it has to be the one you actually test.
+>
+> And there is a hard trap in it. **A `popover` element is in the top layer, and the containing
+> block of a top-layer element is the viewport — not the nearest positioned ancestor.** So this,
+> which looks obviously right, silently pins the tooltip to the top-left of the *page*:
+>
+> ```css
+> /* BROKEN for a popover. .tipwrap is not its containing block. */
+> @supports not (anchor-name: --a) {
+>   .tipwrap { position: relative; }
+>   .tip { position: absolute; bottom: -8px; left: 50%; }
+> }
+> ```
+>
+> You have exactly two honest options, both given in #4:
+> **(a)** keep `popover` and position the fallback from JS in viewport coordinates, or
+> **(b)** drop `popover` in the fallback so the element stays in normal flow and `position: relative`
+> on the wrapper works again — at the cost of hand-rolling Escape and light dismiss.
+> This file uses (a).
 
 **No library is named anywhere in this file.** All twenty effects are achievable natively.
 See §21 for the only two cases where reaching for one is defensible.
@@ -386,11 +415,15 @@ animation loop. JS is used once, at build/hydrate time, only to split the text.
 .lift {
   display: inline-block;
   overflow: hidden;                 /* the clipping box */
+  /* fallthrough: see .lift__txt below — it must not stay `display: inline`. */
   line-height: 1.15;                /* tight, or descenders get shaved */
   color: var(--ink);
   text-decoration: none;
   vertical-align: bottom;
 }
+/* `transform` has NO effect on a non-replaced inline box. A bare <span> is `display: inline`,
+   so the touch-press nudge below silently does nothing until this line exists. */
+.lift__txt { display: inline-block; }
 .lift__char {
   display: inline-block;
   white-space: pre;                 /* preserves the split spaces */
@@ -488,8 +521,15 @@ runs only while a pointer is inside the zone and stops itself, so idle cost is z
 }
 .mag__el {
   will-change: auto;
-  transform: translate3d(var(--mx, 0px), var(--my, 0px), 0);
-  transition: transform var(--dur-base) var(--ease-spring); /* used only on release */
+  /* Use the independent `translate` property, NOT `transform`.
+     The example above composes .mag__el with .fx-btn, and `.fx-btn:hover { transform: … }`
+     is specificity 0,2,0 against `.mag__el`'s 0,1,0 — so a `transform`-based magnet is
+     silently overwritten the instant the cursor arrives, which is exactly when it is
+     supposed to work. The JS keeps updating --mx/--my and nothing moves.
+     `translate` is a separate property: it composes with any `transform` the host
+     component brings, and it is applied before it. Baseline widely available. */
+  translate: var(--mx, 0px) var(--my, 0px);
+  transition: translate var(--dur-base) var(--ease-spring); /* used only on release */
 }
 .mag.is-pulling .mag__el { transition: none; }              /* live tracking, no lag */
 
@@ -497,14 +537,20 @@ runs only while a pointer is inside the zone and stops itself, so idle cost is z
    There is no cursor to be magnetic toward. The button is already complete. */
 @media (hover: none), (pointer: coarse) {
   .mag { padding: 0; margin: 0; }
-  .mag__el { transform: none !important; }
+  .mag__el { translate: none !important; }
 }
 
 /* ---- Law 2 ---- */
 @media (prefers-reduced-motion: reduce) {
-  .mag__el { transform: none !important; transition: none; }
+  .mag__el { translate: none !important; transition: none; }
 }
 ```
+
+> **General rule this exposes.** Any effect meant to be *composed onto* an arbitrary host
+> component must not claim the `transform` property — the host will fight it and win, or lose,
+> unpredictably. Reach for `translate` / `rotate` / `scale` (the independent properties) whenever
+> the moving element is not one you exclusively own. `#3` is the one effect in this file that is
+> documented as wrapping an arbitrary host component, so it is the one that must obey this.
 
 ```js
 import { canHover, reduced, isMouse, clamp, lerp, onEnvChange } from './fx-core.js';
@@ -532,7 +578,7 @@ function initMagnetic() {
     zone.addEventListener('pointerenter', (e) => {
       if (!isMouse(e)) return;                                // hybrid guard
       zone.classList.add('is-pulling');
-      el.style.willChange = 'transform';
+      el.style.willChange = 'translate';
     });
     zone.addEventListener('pointermove', (e) => {
       if (!isMouse(e)) return;
@@ -623,10 +669,20 @@ Chrome-Canary-behind-a-flag as of today and cannot be shipped.
     position-try-fallbacks: flip-block, flip-inline;  /* stay on screen */
   }
 }
-/* --- Fallback: wrap trigger + tip in .tipwrap { position: relative } --- */
+/* --- Fallback: Firefox + Safari, i.e. most non-Chromium traffic. TEST THIS PATH.
+   A popover is in the top layer, so its containing block is the VIEWPORT — an ancestor
+   with `position: relative` is not its containing block and wrapping it changes nothing.
+   So we position in viewport coordinates with `position: fixed` and let JS write the
+   two numbers. `position: fixed` is correct here precisely because the top layer is
+   already viewport-relative; there is no scroll-offset maths to get wrong. --- */
 @supports not (anchor-name: --a) {
-  .tipwrap { position: relative; display: inline-block; }
-  .tip { position: absolute; inset: auto auto -8px 50%; translate: -50% 100%; }
+  .tip {
+    position: fixed;
+    top: var(--tip-y, 0px);
+    left: var(--tip-x, 0px);
+    translate: -50% 0;               /* centre on the trigger */
+    margin: 0;
+  }
 }
 
 /* ---- Touch strategy B: promote to an explicit gesture ----
@@ -654,9 +710,29 @@ document.querySelectorAll('[popovertarget]').forEach((btn) => {
   const tip = document.getElementById(btn.getAttribute('popovertarget'));
   if (!tip?.matches('[role="tooltip"]')) return;
 
+  /* Placement fallback for engines without anchor positioning (Firefox, Safari today).
+     Runs immediately before each open, so it survives scroll, resize and reflow.
+     Chromium skips it entirely — CSS already did the work, including the flip. */
+  const NO_ANCHOR = !CSS.supports('anchor-name', '--a');
+  const place = () => {
+    if (!NO_ANCHOR) return;
+    const r = btn.getBoundingClientRect();
+    const below = r.bottom + 8;
+    const flip  = below + tip.offsetHeight > innerHeight;      // poor man's flip-block
+    tip.style.setProperty('--tip-x', `${r.left + r.width / 2}px`);
+    tip.style.setProperty('--tip-y', `${flip ? r.top - 8 - tip.offsetHeight : below}px`);
+  };
+
+  /* showPopover()/hidePopover() are specified to throw InvalidStateError when the popover
+     is already in the requested state, and these handlers overlap by design (hover, focus
+     and the native popovertarget click can all fire around one interaction). Make both
+     idempotent rather than scattering try/catch. */
+  const show = () => { if (!tip.matches(':popover-open')) { place(); tip.showPopover(); } };
+  const hide = () => { if (tip.matches(':popover-open')) tip.hidePopover(); };
+
   let openT, closeT;
-  const open  = () => { clearTimeout(closeT); openT  = setTimeout(() => tip.showPopover(), 140); };
-  const close = () => { clearTimeout(openT);  closeT = setTimeout(() => tip.hidePopover(), 90);  };
+  const open  = () => { clearTimeout(closeT); openT  = setTimeout(show, 140); };
+  const close = () => { clearTimeout(openT);  closeT = setTimeout(hide, 90);  };
 
   if (canHover()) {
     btn.addEventListener('pointerenter', (e) => isMouse(e) && open());
@@ -667,8 +743,12 @@ document.querySelectorAll('[popovertarget]').forEach((btn) => {
     btn.addEventListener('click', (e) => { if (tip.matches(':popover-open')) e.preventDefault(); });
   }
   /* Keyboard parity, always on. */
-  btn.addEventListener('focus', () => tip.showPopover());
-  btn.addEventListener('blur',  () => tip.hidePopover());
+  btn.addEventListener('focus', show);
+  btn.addEventListener('blur',  hide);
+
+  /* The native popovertarget click path bypasses show()/place(), so re-place on open.
+     Harmless no-op on Chromium. */
+  tip.addEventListener('beforetoggle', (e) => { if (e.newState === 'open') place(); });
 });
 ```
 
@@ -712,8 +792,11 @@ the same amount. Two transforms, zero repaint, perfect registration.
   overflow: hidden;
   border-radius: var(--radius);
   touch-action: none;              /* we own the drag gesture on touch */
-  cursor: none;                    /* the lens IS the cursor (restore on touch below) */
 }
+/* `cursor: none` ONLY while the lens is actually live. Applying it unconditionally in CSS
+   means that if the JS fails, is deferred, or has not hydrated yet, the user gets no cursor
+   AND no lens — a dead rectangle they cannot even point at. Enhancement-gated, always. */
+.xray.is-live { cursor: none; }
 .xray__base,
 .xray__inner {
   position: absolute;
@@ -731,8 +814,9 @@ the same amount. Two transforms, zero repaint, perfect registration.
   overflow: hidden;
   box-shadow: 0 0 0 2px oklch(100% 0 0 / .7), 0 18px 40px -18px oklch(0% 0 0 / .6);
   opacity: 0;
-  /* GPU: only the lens moves. */
-  transform: translate3d(var(--x, 50%), var(--y, 50%), 0);
+  /* GPU: only the lens moves. Default MUST agree with .xray__inner's default below
+     (both 0px), or the two layers start out of register on the first frame. */
+  transform: translate3d(var(--x, 0px), var(--y, 0px), 0);
   transition: opacity var(--dur-base) var(--ease-out);
 }
 .xray__inner {
@@ -779,9 +863,19 @@ the same amount. Two transforms, zero repaint, perfect registration.
 ```js
 import { reduced, rafWrite, onEnvChange } from './fx-core.js';
 
+/* onEnvChange re-runs this whenever the user flips OS motion or swaps input device.
+   Without teardown every re-run stacks a fresh set of pointer listeners on the same
+   node, so after three OS toggles every pointermove does the work three times.
+   One AbortController per element makes re-init idempotent. */
+const xrayCtl = new WeakMap();
+
 function initXray() {
   document.querySelectorAll('.xray').forEach((fig) => {
+    xrayCtl.get(fig)?.abort();                                    // drop the previous binding
     if (reduced()) { fig.classList.remove('is-live'); return; }   // Law 2: static split
+    const ac = new AbortController();
+    const on = { signal: ac.signal };
+    xrayCtl.set(fig, ac);
     const lens = fig.querySelector('.xray__lens');
     const inner = fig.querySelector('.xray__inner');
     const write = rafWrite();
@@ -802,14 +896,17 @@ function initXray() {
     };
 
     // Mouse: hover. Touch/pen: press-and-drag. One handler set, branched by pointerType.
-    fig.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { measure(); fig.classList.add('is-live'); } });
-    fig.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') fig.classList.remove('is-live'); });
-    fig.addEventListener('pointerdown',  (e) => { measure(); fig.setPointerCapture(e.pointerId); fig.classList.add('is-live'); move(e); });
-    fig.addEventListener('pointerup',    (e) => { if (e.pointerType !== 'mouse') fig.classList.remove('is-live'); });
-    fig.addEventListener('pointercancel',()  => fig.classList.remove('is-live'));
+    fig.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { measure(); fig.classList.add('is-live'); } }, on);
+    fig.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') fig.classList.remove('is-live'); }, on);
+    fig.addEventListener('pointerdown',  (e) => { measure(); fig.setPointerCapture(e.pointerId); fig.classList.add('is-live'); move(e); }, on);
+    fig.addEventListener('pointerup',    (e) => { if (e.pointerType !== 'mouse') fig.classList.remove('is-live'); }, on);
+    fig.addEventListener('pointercancel',()  => fig.classList.remove('is-live'), on);
     fig.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'mouse' || e.buttons || fig.hasPointerCapture?.(e.pointerId)) move(e);
-    });
+    }, on);
+    /* getBoundingClientRect is viewport-relative, so a scroll while hovering invalidates
+       the cached box and the lens drifts off the cursor. Re-measure on scroll too. */
+    addEventListener('scroll', measure, { ...on, passive: true });
   });
 }
 initXray();
@@ -863,9 +960,12 @@ inner panel. Pure compositor. No `mask-image` animation (that repaints), no `hei
   padding: 1.1rem;
   background: linear-gradient(transparent, oklch(0% 0 0 / .82) 38%);
   color: oklch(100% 0 0);
-  /* Everything below the title starts pushed down behind the edge. */
-  transform: translateY(var(--hide, 0px));
-  transition: transform var(--dur-slow) var(--ease-out);
+  /* The panel itself does NOT move. An earlier revision carried a `--hide` custom property
+     and a transform transition here; `--hide` was never assigned anything but 0px, so the
+     panel's computed transform was the identity matrix at all times and the transition
+     never had anything to animate. The reveal is entirely .reveal__meta's job (below),
+     clipped by `overflow: hidden` on .reveal. Dead machinery removed — if you want the
+     whole panel to slide, animate .reveal__meta's height contribution instead, not this. */
 }
 .reveal__meta {
   margin: .35rem 0 0;
@@ -878,7 +978,6 @@ inner panel. Pure compositor. No `mask-image` animation (that repaints), no `hei
 @media (hover: hover) and (pointer: fine) {
   /* Rest state: hide the meta line behind the edge. Its own height, measured in CSS. */
   .reveal__meta { opacity: 0; transform: translateY(120%); }
-  .reveal__panel { --hide: 0px; }
   .reveal__link:hover .reveal__media,
   .reveal__link:focus-visible .reveal__media { transform: scale(1.045); }
   .reveal__link:hover .reveal__meta,
@@ -903,7 +1002,8 @@ inner panel. Pure compositor. No `mask-image` animation (that repaints), no `hei
 
 **Scroll-triggered sibling.** If you want the same panel to reveal on scroll rather than hover
 (which is what touch users get on a long page), use a `view()` timeline — always `@supports`-guarded,
-because scroll-driven animations are **not Baseline** (Chrome 115+, FF 132+, Safari 18+, ~84%):
+because scroll-driven animations are **Baseline: Limited** (Chrome 115, Safari 26, **no Firefox at
+all**). Assume roughly a third of your visitors never see this and make sure that is fine:
 
 ```css
 @supports (animation-timeline: view()) {
@@ -943,7 +1043,9 @@ frame. Budget: one instance per page, container under ~420px, ≤ 5 blobs, filte
   <filter id="goo-filter">
     <feGaussianBlur in="SourceGraphic" stdDeviation="11" result="b"/>
     <!-- crush the alpha ramp: 19x alpha, -9 offset -> soft overlaps become one solid shape -->
-    <feColorMatrix in="b" mode="matrix"
+    <!-- `type`, not `mode`. `mode` belongs to <feBlend>; on <feColorMatrix> it is ignored,
+         and this only appears to work because `matrix` is the default value of `type`. -->
+    <feColorMatrix in="b" type="matrix"
       values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo"/>
     <feBlend in="SourceGraphic" in2="goo"/>
   </filter>
@@ -1220,10 +1322,17 @@ const io = new IntersectionObserver((entries, obs) => {
     if (!en.isIntersecting) continue;
     en.target.classList.add('is-in');
     obs.unobserve(en.target);
-    // Tear the grid down once the last tile has finished — zero residual DOM cost.
+    // Tear the grid down once the LAST tile has finished — zero residual DOM cost.
     const grid = en.target.querySelector('.pix__grid');
-    grid?.addEventListener('animationend', () => grid.remove(), { once: false });
-    setTimeout(() => grid?.remove(), 1400);
+    if (!grid) continue;
+    // A bubbled `animationend` listener fires on the FIRST tile to finish, which would
+    // rip the grid out mid-dissolve and pop the remaining ~239 tiles out of existence.
+    // Wait on all of them instead. getAnimations() is Baseline widely available.
+    const anims = grid.getAnimations({ subtree: true });
+    (anims.length
+      ? Promise.allSettled(anims.map(a => a.finished))
+      : new Promise(r => setTimeout(r, 1400))
+    ).then(() => grid.remove());
   }
 }, { threshold: 0.25 });
 
@@ -1316,8 +1425,15 @@ sit in an unfiltered sibling. This is the difference between a slick menu and a 
   .gdrop__menu { position: absolute; position-anchor: --gdrop-1; position-area: block-end center;
                  margin-block-start: 10px; position-try-fallbacks: flip-block; }
 }
+/* Same top-layer trap as #4: `.gdrop { position: relative }` is NOT this popover's
+   containing block, so `position: absolute` here would pin the menu to the page corner.
+   Position in viewport coordinates and let JS supply the two numbers. */
 @supports not (anchor-name: --a) {
-  .gdrop__menu { position: absolute; inset: auto auto -10px 50%; translate: -50% 100%; }
+  .gdrop__menu {
+    position: fixed;
+    top: var(--gd-y, 0px); left: var(--gd-x, 0px);
+    translate: -50% 0;
+  }
 }
 
 /* Items and goo blobs share one geometry: stacked at the origin, pushed apart by transform. */
@@ -1370,6 +1486,22 @@ sit in an unfiltered sibling. This is the difference between a slick menu and a 
 }
 ```
 
+```js
+/* Only needed on engines without anchor positioning. Six lines, no dependency. */
+if (!CSS.supports('anchor-name', '--a')) {
+  document.querySelectorAll('.gdrop').forEach((wrap) => {
+    const btn = wrap.querySelector('.gdrop__btn');
+    const menu = wrap.querySelector('.gdrop__menu');
+    menu.addEventListener('beforetoggle', (e) => {
+      if (e.newState !== 'open') return;
+      const r = btn.getBoundingClientRect();
+      menu.style.setProperty('--gd-x', `${r.left + r.width / 2}px`);
+      menu.style.setProperty('--gd-y', `${r.bottom + 10}px`);
+    });
+  });
+}
+```
+
 **A11y.** `popover` handles Escape and outside-click. Add roving arrow-key navigation if the menu
 exceeds three items; below that, Tab order is sufficient and expected.
 
@@ -1399,6 +1531,11 @@ position and size for you — no `getBoundingClientRect`, no FLIP maths, no libr
 .pills { display: inline-flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--bg-2); }
 .pills__i {
   position: relative;
+  /* REQUIRED, not cosmetic. `position: relative` with `z-index: auto` does NOT create a
+     stacking context, so a `z-index: -1` child escapes upward and paints *behind* the
+     `.pills` background — the active item's pill vanishes and its light-on-light label
+     becomes invisible. `isolation: isolate` traps the negative z-index at this level. */
+  isolation: isolate;
   padding: .5rem 1rem;
   border-radius: 999px;
   color: var(--ink-2);
@@ -1525,11 +1662,18 @@ just `translateZ` on inline spans.
 }
 .quote3d.is-live .quote3d__card { transition: none; }   /* live tracking, spring on exit */
 
-.quote3d__txt { font-size: clamp(1.1rem, 2.6vw, 1.7rem); line-height: 1.35; margin: 0; }
+.quote3d__txt {
+  font-size: clamp(1.1rem, 2.6vw, 1.7rem); line-height: 1.35; margin: 0;
+  /* REQUIRED. `transform-style` is not inherited, and its initial value is `flat`.
+     Without this the <p> flattens its children into its own plane and every word's
+     translateZ resolves to nothing — the effect renders as ordinary flat text and
+     looks like it "just isn't very strong" rather than like it is broken.
+     Every ancestor between the perspective element and the depth element needs it. */
+  transform-style: preserve-3d;
+}
 .quote3d__w {
   display: inline-block;
   white-space: pre;
-  transform-style: preserve-3d;
   /* Whole-pixel Z values only: fractional translateZ blurs text in Chromium. */
   transform: translateZ(var(--z, 0px));
 }
@@ -1633,7 +1777,10 @@ and costs 150 KB.
   transform-style: preserve-3d;
   animation: globe-spin 34s linear infinite;
   cursor: grab;
-  touch-action: none;
+  /* pan-y, NOT none. This is a large round target sitting mid-page; `touch-action: none`
+     would swallow every vertical flick that happens to start on it and trap the user
+     inside the globe. We only own horizontal drags. Same reasoning as #18. */
+  touch-action: pan-y;
 }
 .globe__sphere:active { cursor: grabbing; }
 .globe.is-dragging .globe__sphere { animation: none; transform: rotateY(var(--gy, 0deg)) rotateX(var(--gx, 0deg)); }
@@ -1647,9 +1794,12 @@ and costs 150 KB.
   border-radius: 999px;
   font-size: .74rem; white-space: nowrap;
   background: var(--bg-2); color: var(--ink); border: 1px solid var(--line);
-  /* Position set once by JS; billboard so labels always face the viewer. */
+  /* Position set once by JS. NOTE: these labels are NOT billboarded — there is no
+     counter-rotation here, so they turn with the sphere and are mirrored on the far side.
+     `backface-visibility: hidden` is the deliberate, cheap answer: back-facing labels are
+     simply not drawn. Roughly half the set is visible at any moment, which is the intended
+     look. See the note under this section before you "fix" it. */
   transform: translate(-50%, -50%) translate3d(var(--px), var(--py), var(--pz));
-  /* Depth cue without per-frame JS: the counter-rotating billboard wrapper handles facing. */
   backface-visibility: hidden;
   transition: background-color var(--dur-fast) linear, color var(--dur-fast) linear;
 }
@@ -1909,9 +2059,17 @@ form on load), `:has()` for the floating label, `@starting-style` for the succes
 .frm__err {
   margin: .35rem 0 0; font-size: .82rem; color: var(--bad);
   opacity: 0; transform: translateY(-4px);
-  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  /* `opacity: 0` hides the message from SIGHTED users only. It stays in the accessibility
+     tree, and because the input points at it with aria-describedby, a screen reader
+     announces "Please enter a valid email address" the moment focus lands on a pristine,
+     never-touched field. `visibility: hidden` removes it from the a11y tree as well;
+     `allow-discrete` keeps it transitionable. Never hide error text with opacity alone. */
+  visibility: hidden;
+  transition: opacity var(--dur-base) var(--ease-out),
+              transform var(--dur-base) var(--ease-out),
+              visibility var(--dur-base) allow-discrete;
 }
-.frm:has(.frm__in:user-invalid) .frm__err { opacity: 1; transform: none; }
+.frm:has(.frm__in:user-invalid) .frm__err { opacity: 1; transform: none; visibility: visible; }
 
 /* Shake, once, on invalid submit (class added by JS, removed on animationend). */
 .frm__f.is-shake { animation: frm-shake 420ms var(--ease-soft); }
@@ -1942,8 +2100,13 @@ form on load), `:has()` for the floating label, `@starting-style` for the succes
   margin-top: 1rem; padding: .9rem 1rem;
   border-radius: 10px; background: color-mix(in oklch, var(--ok) 16%, var(--bg)); color: var(--ink);
   opacity: 1; transform: none;
-  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out),
-              content-visibility var(--dur-base) allow-discrete;
+  /* The panel is toggled with the `hidden` ATTRIBUTE, i.e. `display: none` -> `display: block`.
+     `@starting-style` alone handles the entry (it supplies the before-change style the first
+     time the element is rendered); no `allow-discrete` is required for appearing. An earlier
+     revision listed `content-visibility ... allow-discrete` here, which is not the property
+     being changed and did nothing at all. If you also want an EXIT animation, that is when
+     you need `display var(--dur-base) allow-discrete`. */
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
 }
 @starting-style { .frm__done { opacity: 0; transform: translateY(8px); } }
 
@@ -2040,18 +2203,28 @@ on a snapshot, so it does not repaint the live page.
 .thm__ico {
   width: 18px; aspect-ratio: 1; border-radius: 50%;
   background: var(--ink);
-  /* sun -> moon by sliding an inset shadow disc across, transform only */
+  /* sun -> moon by sliding an inset shadow disc across.
+     Law 3, exception 4 (this one was previously undeclared): an 18px inset box-shadow
+     offset transition. It repaints, but the painted area is 18×18 CSS px on a single
+     element, once per click. The transform-only alternative — a second absolutely
+     positioned disc translated across — is also fine and strictly cheaper; use it if
+     this toggle sits inside a sticky header that is already compositing. */
   box-shadow: inset 0 0 0 0 var(--bg-2);
   transform: scale(1);
   transition: transform var(--dur-base) var(--ease-spring), box-shadow var(--dur-base) var(--ease-out);
 }
 :root[data-theme='dark'] .thm__ico { transform: scale(.82); box-shadow: inset -7px -3px 0 0 var(--bg-2); }
 
-/* --- The wipe. Kill the default crossfade, keep old below, clip the new one open. --- */
-::view-transition-old(root),
-::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-::view-transition-old(root) { z-index: 0; }
-::view-transition-new(root) { z-index: 1; }
+/* --- The wipe. Kill the default crossfade, keep old below, clip the new one open. ---
+   EVERY rule here is scoped to :root.thm-wipe. Unscoped `::view-transition-old(root)`
+   rules are page-global: they would also rewrite the root snapshot of the nav pill (#11)
+   and the filter grid (#17), which start their own view transitions and have nothing to
+   do with theming. This is the same reason the class exists at all — see the note below,
+   which an earlier revision contradicted by leaving these three declarations unscoped. */
+:root.thm-wipe::view-transition-old(root),
+:root.thm-wipe::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+:root.thm-wipe::view-transition-old(root) { z-index: 0; }
+:root.thm-wipe::view-transition-new(root) { z-index: 1; }
 
 :root.thm-wipe::view-transition-new(root) {
   animation: thm-reveal 620ms var(--ease-out);
@@ -2302,7 +2475,12 @@ are not optional garnish; they are the accessible interface, and the swipe is th
 .swipe__c.is-gone { pointer-events: none; }
 
 @media (hover: hover) and (pointer: fine) {
-  .swipe__c[style*='--k:0']:hover { box-shadow: 0 30px 60px -28px oklch(0% 0 0 / .6); }
+  /* Match a CLASS, not the style attribute. `[style*='--k:0']` matches the hand-written
+     HTML and then stops matching forever the moment restack() runs, because
+     `el.style.setProperty('--k', 0)` re-serialises the attribute as `--k: 0` — with a
+     space. The selector goes dead on the first frame and nobody notices, because a
+     missing hover shadow looks like a design decision. Never selector-match CSSOM output. */
+  .swipe__c.is-top:hover { box-shadow: 0 30px 60px -28px oklch(0% 0 0 / .6); }
 }
 
 /* ---- Touch: this IS the native modality. Mouse drag uses the same code path.
@@ -2326,7 +2504,11 @@ document.querySelectorAll('.swipe').forEach((root) => {
   let cards = [...root.querySelectorAll('.swipe__c')];
 
   const restack = () => {
-    cards.forEach((c, i) => { c.style.setProperty('--k', i); c.style.zIndex = cards.length - i; });
+    cards.forEach((c, i) => {
+      c.style.setProperty('--k', i);
+      c.style.zIndex = cards.length - i;
+      c.classList.toggle('is-top', i === 0);   // drives the hover shadow; see CSS note
+    });
     status.textContent = cards[0] ? `Showing testimonial 1 of ${cards.length}.` : 'End of testimonials.';
   };
   restack();
@@ -2403,12 +2585,26 @@ a hero flourish around a headline. Register: universal, and unusually good for t
 with one transform, and keeps labels upright with no per-frame JS. `offset-path` is the elegant
 alternative but `offset-distance` is not reliably composited, so the triple wins.
 
+**The mistake everyone makes here (and how it looks when it happens).** The obvious move is to
+put the positioning transform *and* a reversed `orbit-spin` animation on the same `<li>`. That
+does not work: `@keyframes orbit-spin { to { transform: rotate(1turn) } }` sets the whole
+`transform` property, so it **replaces** the `translate(-50%,-50%) rotate() translate(var(--r))
+rotate()` chain instead of composing with it. The implicit `from` is the element's positioned
+transform, so over one cycle every label interpolates from its slot on the ring *to a bare
+`rotate(360deg)` at the centre* — the ring silently collapses into an unreadable pile on top of
+the hub. A `transform` keyframe is never additive.
+
+The fix is one extra element: the `<li>` owns the position, an inner `<span>` owns the
+counter-spin. Two transforms on two elements compose; two transforms on one element do not.
+
 ```html
 <div class="orbit" style="--n: 7">
   <div class="orbit__hub">Certified</div>
   <ul class="orbit__ring">
-    <li style="--i:0">Gas Safe</li><li style="--i:1">NICEIC</li><li style="--i:2">TrustMark</li>
-    <li style="--i:3">CHAS</li><li style="--i:4">FMB</li><li style="--i:5">Which?</li><li style="--i:6">SafeContractor</li>
+    <li style="--i:0"><span>Gas Safe</span></li><li style="--i:1"><span>NICEIC</span></li>
+    <li style="--i:2"><span>TrustMark</span></li><li style="--i:3"><span>CHAS</span></li>
+    <li style="--i:4"><span>FMB</span></li><li style="--i:5"><span>Which?</span></li>
+    <li style="--i:6"><span>SafeContractor</span></li>
   </ul>
 </div>
 ```
@@ -2432,41 +2628,55 @@ alternative but `offset-distance` is not reliably composited, so the triple wins
 }
 @keyframes orbit-spin { to { transform: rotate(1turn); } }
 
+/* The <li> owns POSITION ONLY. No animation on this element, ever. */
 .orbit__ring li {
   position: absolute;
   left: 50%; top: 50%;
-  padding: .3rem .65rem;
-  border-radius: 999px;
-  background: var(--bg-2); border: 1px solid var(--line);
-  font-size: .74rem; white-space: nowrap;
-  /* rotate to the slot -> push out by the radius -> counter-rotate so the label stays upright */
+  /* rotate to the slot -> push out by the radius -> undo the slot rotation */
   transform:
     translate(-50%, -50%)
     rotate(calc(var(--i) * (360deg / var(--n))))
     translate(var(--r))
     rotate(calc(var(--i) * (-360deg / var(--n))));
-  /* the ring's own rotation would tilt the labels, so counter-spin each one */
+}
+/* The inner <span> owns the COUNTER-SPIN ONLY, so it composes with the line above
+   instead of overwriting it. This split is the whole point. */
+.orbit__ring li > span {
+  display: block;
+  padding: .3rem .65rem;
+  border-radius: 999px;
+  background: var(--bg-2); border: 1px solid var(--line);
+  font-size: .74rem; white-space: nowrap;
   animation: orbit-spin var(--spin) linear infinite reverse;
+  transition: background-color var(--dur-fast) linear, color var(--dur-fast) linear;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .orbit:hover .orbit__ring,
-  .orbit:hover .orbit__ring li { animation-play-state: paused; }   /* read the labels */
-  .orbit__ring li:hover { background: var(--accent); color: oklch(100% 0 0); border-color: transparent; }
+  .orbit:hover .orbit__ring li > span { animation-play-state: paused; }   /* read the labels */
+  .orbit__ring li > span:hover { background: var(--accent); color: oklch(100% 0 0); border-color: transparent; }
 }
 
-/* ---- Touch strategy B: tap the ring to pause/resume (JS toggles .is-held).
+/* ---- Touch strategy B: tap-and-hold the ring, or the always-present Pause button.
    Autonomous motion needs a stop control on touch — there is no "move away to resume". ---- */
 @media (hover: none) {
   .orbit { --r: clamp(96px, 34vw, 150px); --spin: 52s; }
 }
 .orbit.is-held .orbit__ring,
-.orbit.is-held .orbit__ring li { animation-play-state: paused; }
+.orbit.is-held .orbit__ring li > span { animation-play-state: paused; }
+
+/* The JS-injected pause control needs real styles or it lands on top of the hub. */
+.orbit__hold {
+  position: absolute; inset: auto 50% 0 auto; translate: 50% 0;
+  padding: .3rem .7rem; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink-2);
+  font: inherit; font-size: .74rem; cursor: pointer;
+}
 
 /* ---- Law 2: no orbit. The ring holds its static arrangement — the information
    (all seven accreditations, in a circle) is completely intact. ---- */
 @media (prefers-reduced-motion: reduce) {
-  .orbit__ring, .orbit__ring li { animation: none; }
+  .orbit__ring, .orbit__ring li > span { animation: none; }
 }
 ```
 
@@ -2482,9 +2692,18 @@ document.querySelectorAll('.orbit').forEach((o) => {
     btn.textContent = held ? 'Resume' : 'Pause';
   });
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) o.append(btn);
-  o.addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'mouse') o.classList.add('is-held');    // finger down = hold
-  });
+
+  /* Finger down = hold, finger up = release. Without the release half, the first tap
+     pauses the ring forever and the button label desyncs from the actual state. */
+  const hold   = (e) => { if (e.pointerType !== 'mouse') o.classList.add('is-held'); };
+  const unhold = (e) => {
+    if (e.pointerType === 'mouse') return;
+    if (btn.textContent === 'Resume') return;      // an explicit Pause press outranks the gesture
+    o.classList.remove('is-held');
+  };
+  o.addEventListener('pointerdown', hold);
+  o.addEventListener('pointerup', unhold);
+  o.addEventListener('pointercancel', unhold);
 });
 ```
 
@@ -2567,11 +2786,17 @@ import { canHover, reduced, isMouse, onEnvChange } from './fx-core.js';
 /* SVG filter primitive attributes are not CSS properties, so neither CSS transitions nor
    WAAPI can touch them. A ~15-line rAF ramp is the whole cost of doing this natively —
    SMIL <animate> would also work but cannot be gated on prefers-reduced-motion from CSS. */
+const liqCtl = new WeakMap();   /* same re-init teardown as #5 — onEnvChange calls this again */
+
 function initLiquify() {
   const map = document.getElementById('liquify-map');
   if (!map) return;
   document.querySelectorAll('.liq').forEach((el) => {
+    liqCtl.get(el)?.abort();
     if (!canHover() || reduced()) { el.classList.remove('is-warp'); return; }
+    const ac = new AbortController();
+    const on = { signal: ac.signal };
+    liqCtl.set(el, ac);
     let cur = 0, target = 0, raf = 0;
     const tick = () => {
       cur += (target - cur) * 0.14;
@@ -2584,8 +2809,8 @@ function initLiquify() {
       }
     };
     const run = () => { if (!raf) raf = requestAnimationFrame(tick); };
-    el.addEventListener('pointerenter', (e) => { if (!isMouse(e)) return; el.classList.add('is-warp'); target = 34; run(); });
-    el.addEventListener('pointerleave', (e) => { if (!isMouse(e)) return; target = 0; run(); });
+    el.addEventListener('pointerenter', (e) => { if (!isMouse(e)) return; el.classList.add('is-warp'); target = 34; run(); }, on);
+    el.addEventListener('pointerleave', (e) => { if (!isMouse(e)) return; target = 0; run(); }, on);
   });
 }
 initLiquify();

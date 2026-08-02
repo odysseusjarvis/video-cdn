@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="tp-title tp-desc"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title id="tp-title">Shopping bag</title>
+  <desc id="tp-desc">A retail shopping bag with two handles and a fold line below the opening.</desc>
+  <g class="tp" style="--n:4">
+    <path class="tp-ln" pathLength="1" style="--i:0" d="M74 56h92l-3 86H77z"/>
+    <path class="tp-ln" pathLength="1" style="--i:1" d="M74 74h92"/>
+    <path class="tp-ln" pathLength="1" style="--i:2" d="M98 56V42a22 22 0 0 1 44 0v14"/>
+    <path class="tp-ln" pathLength="1" style="--i:3" d="M106 46a14 14 0 0 1 28 0"/>
+  </g>
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-labelledby="tp-title tp-desc"
+     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title id="tp-title">Barbell and lift arc</title>
+  <desc id="tp-desc">A loaded barbell at the top of an arc that traces the path of a lift, with an arrowhead at the end.</desc>
+  <g class="tp" style="--n:9">
+    <path class="tp-ln" pathLength="1" style="--i:0" d="M56 76Q120 20 184 76"/>
+    <path class="tp-ln" pathLength="1" style="--i:1" d="M180 64 184 76 171 74"/>
+    <circle class="tp-ln" pathLength="1" style="--i:2" cx="56" cy="76" r="3"/>
+    <path class="tp-ln" pathLength="1" style="--i:3" d="M46 116h148"/>
+    <path class="tp-ln" pathLength="1" style="--i:4" d="M60 96h10v40H60z"/>
+    <path class="tp-ln" pathLength="1" style="--i:5" d="M48 104h8v24h-8z"/>
+    <path class="tp-ln" pathLength="1" style="--i:6" d="M170 96h10v40h-10z"/>
+    <path class="tp-ln" pathLength="1" style="--i:7" d="M184 104h8v24h-8z"/>
+    <path class="tp-ln" pathLength="1" style="--i:8" d="M88 110v12M152 110v12"/>
+  </g>
+</svg>
