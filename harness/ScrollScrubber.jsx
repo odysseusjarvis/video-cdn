@@ -1,1 +1,0 @@
-../.claude/skills/premium-web/assets/ScrollScrubber.jsx
